@@ -3,16 +3,7 @@
 # with parts derived from MIT-licensed Pimoroni example code.
 # Licensed under the EUPL-1.2-or-later.
 
-# TODO:
-#  - Flag parsing stuff.
-#    - Sensors to look for.
-#    - Prometheus metrics port.
-#      - Whether to allow python metrics.
-#  - ...that is also scope creep.
-#    - Trace to stdout.
-#    - Log to rrdtool for long-term.
-#    - Show on ST7789.
-
+import sys
 import time
 from datetime import datetime
 
@@ -39,19 +30,19 @@ bme280_pressure = Gauge('bme280_pressure_pascals', 'Barometric pressure in pasca
 bme280_humidity = Gauge('bme280_humidity_ratio', 'Relative humidity')
 
 # Sensors
-print("Initializing SGP30")
+sys.stderr.write("Initializing SGP30\n")
 sgp30_sensor = SGP30()
 # We'll simply be down from Promethus' PoV while it warms up.
 # A better approach would probably be to offer no data for this metric yet.
-print("SGP30 warming up, waiting 15s")
+sys.stderr.write("SGP30 warming up, waiting 15s\n")
 sgp30_sensor.start_measurement()
 
-print("Initializing SMBus and BME280")
+sys.stderr.write("Initializing SMBus and BME280\n")
 smbus = SMBus(1)
 bme280_sensor = BME280(i2c_dev=smbus)
 
 # Start up the metric export.
-print("Starting webserver")
+sys.stderr.write("Starting webserver and becoming ready\n")
 start_http_server(9092)
 
 # Loop and poll sensors.
@@ -72,7 +63,7 @@ while True:
 	# Humidity is given as a percentage; Prometheus prefers 0-1 scales.
 	bme280_humidity.set(bme280_sensor.humidity / 100.0)
 
-	# For debugging, print the results for now as well.
+	# For debugging, print the results to stdout for now as well.
 	print('{} eCO2: {: 5d} ppm; TVOC: {: 5d} ppb; {:05.2f}°C {:05.2f}hPa {:05.2f}%'.format(
 		datetime.now().strftime("%H:%M:%S"),
 		sgp30_result.equivalent_co2,
