@@ -20,7 +20,7 @@ This is the console provided by the configuration below:
 
 Note that it does *not* currently support all the sensors in the Pimoroni [Enviro](https://shop.pimoroni.com/products/enviro) HAT, just the BME280, although it should be easy enough to add (the name is perhaps a little aspirational). I just don't have the hardware to test (or, thus, much inclination). I would suspect that having both this and the code running the display read the sensors at the same time would work poorly, though. If you have the actual hat, it may be easier to hack *that* to export to Prometheus, than hack *this* to co-exist.
 
-If you want to use the modules above, it's probably easier to plug them into Pimoroni's [breakout garden](https://shop.pimoroni.com/products/breakout-garden-hat-i2c-spi) (there are versions for most Pi variants now). Then evreything just plugs together, which is nice.
+If you want to use the modules above, it's probably easier to plug them into Pimoroni's [breakout garden](https://shop.pimoroni.com/products/breakout-garden-hat-i2c-spi) (there are versions for most Pi variants now). Then everything just plugs together, which is nice.
 
 ## Setup
 
@@ -46,7 +46,7 @@ Alternatively, if you're wary of random scripts cluttering your system, it's goo
 
 ### "Configure" prometheus-enviro-sensors
 
-Since anything configuable is currently a TODO, if you don't have exactly the set of sensors supported, or want to listen on a different port, edit `prometheus-enviro-sensors.py` and comment parts out to taste.
+Since anything configurable is currently a TODO, if you don't have exactly the set of sensors supported, or want to listen on a different port, edit `prometheus-enviro-sensors.py` and comment parts out to taste.
 
 ### Configure systemd
 
@@ -143,14 +143,14 @@ There is absolutely no guarantee I'll ever get to any of this. It's an idea dump
 - Sensor support by flag.
 - STDOUT tracing by flag.
 - Support more of the environmental sensors, like the relevant EnviroHat ones.
-  - [LTR-559](https://shop.pimoroni.com/products/ltr-559-light-proximity-sensor-breakout) (light, promixity)
+  - [LTR-559](https://shop.pimoroni.com/products/ltr-559-light-proximity-sensor-breakout) (light, proximity)
   - [MICS6814](https://shop.pimoroni.com/products/mics6814-gas-sensor-breakout) (CO, NO2, NH3)
 - Allow using the CPU temperature compensation logic that's in the examples for the BME280, for setups that have the board mounted directly over it. (I use a short GPIO ribbon cable.)
 - For that matter, implement `vcgencmd measure_temp` as an optional sensor, so it can be compensated for Prometheus-side with a computed metric if desired.
 - Configurable Prometheus metrics port instead of hardcoding 9092.
 - Optionally allow the stock Python metrics.
 - Bother to set up the console to support multiple instances.
-- Suggest some Prometheus alerts, like high CO/2 concentations.
+- Suggest some Prometheus alerts, like high CO/2 concentrations.
 
 Bugs/nits:
 
