@@ -136,12 +136,13 @@ Now you should be able to go to <http://localhost:9090/consoles/prometheus.html>
 
 ## TODO
 
-There is absolutely no guarantee I'll ever get to any of this. It's an idea dumping ground.
+There is absolutely no guarantee I'll ever get to any of this. It's an idea dumping ground. Pull requests welcome though.
 
 - Flag parsing to toggle features on and off.
 - Proper `/etc/defaults/` `$ARGV` for the systemd unit to handle flags.
 - Sensor support by flag.
 - STDOUT tracing by flag.
+- The SGP30 really wants a baseline value saved and restored when monitoring is interrupted, which is something the daemon could do on startup/shutdown, otherwise it takes up to 12 hours to recover properly. (This is very visible as readings plummeting down to minimums on a daemon restart.) See [discussion about it on the Adafruit forums](https://forums.adafruit.com/viewtopic.php?f=19&t=133097#p661509). The example code doesn't do this, but [the library has the methods for it](https://github.com/pimoroni/sgp30-python/blob/master/library/sgp30/__init__.py#L165).
 - Support more of the environmental sensors, like the relevant EnviroHat ones.
   - [LTR-559](https://shop.pimoroni.com/products/ltr-559-light-proximity-sensor-breakout) (light, proximity)
   - [MICS6814](https://shop.pimoroni.com/products/mics6814-gas-sensor-breakout) (CO, NO2, NH3)
@@ -155,12 +156,11 @@ There is absolutely no guarantee I'll ever get to any of this. It's an idea dump
 Bugs/nits:
 
 - The stderr messages *should* be going into the journal that `systemctl status` shows snippets from, but seem to be getting lost. This doesn't really matter since it's just startup messages.
-- The SGP30 seems to really drop its readings to the minimum values incredibly when restarted, taking a while to climb back up to where it was. I guess this might just be a hardware thing, but it kinda sucks. The startup code here is the same as the example, which does it too.
 
 Really scope-creepy stuff:
 
 - Log to rrdtool as well, for more suitable long-term storage with downsampling.
-- Show metrics or possibly Prometheus alerts on mini breakout garden displays like the [ST7789](https://shop.pimoroni.com/products/1-3-spi-colour-lcd-240x240-breakout). For example, have an alert suggest an image and a priority as labels, and if there are any, show the highest one and the metric value, else keep the screen backlight off.
+- Show metrics or possibly Prometheus alerts on mini breakout garden displays like the [ST7789](https://shop.pimoroni.com/products/1-3-spi-colour-lcd-240x240-breakout). For example, have an alert suggest an image and a priority as labels, and if there are any, show the highest one and the metric value, else keep the screen backlight off. This should be a separate process.
 
 ## License
 
