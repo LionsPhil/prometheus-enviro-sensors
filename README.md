@@ -65,6 +65,8 @@ sudo systemctl status prometheus-enviro-sensors.service
 
 It should report `active (running)`. If you open <http://localhost:9092/> in a browser (or the IP address of the computer you're running the service on), you should get a text response of sensor values.
 
+> **To uninstall or deactivate,** use `systemctl stop` and `systemctl disable`. The former will kill the daemon and leave the sensors/GPIO interface free to be used by other processes. The latter will remove the configuration that makes it start on boot.
+
 ### Configure Prometheus
 
 #### Scrape config
