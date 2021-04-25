@@ -3,47 +3,83 @@
 # with parts derived from MIT-licensed Pimoroni example code.
 # Licensed under the EUPL-1.2-or-later.
 
+import argparse
 import sys
 import time
 from datetime import datetime
 
-from sgp30 import SGP30
-try:
-    from smbus2 import SMBus
-except ImportError:
-    from smbus import SMBus
-from bme280 import BME280
-
 from prometheus_client import REGISTRY, start_http_server, Gauge
 
-# Zap the default metrics, since we don't care at all about the health of this
-# daemon; it's not business logic to instrument. If it's up, that's good enough.
-# https://github.com/prometheus/client_python/issues/414
-for coll in list(REGISTRY._collector_to_names.keys()):
-	REGISTRY.unregister(coll)
+# Arguments
+# Python doesn't seem to have a 'default true, allow --no-foo' flag, even with
+# BooleanOptionalAction in 3.9 (and Raspbian is on 3.7 at time of writing).
+# Prometheus export isn't optional because it's kind of what this is for (and
+# will only be used if explicitly scraped).
+arg_parser = argparse.ArgumentParser(description='Export environment sensors to Prometheus.')
+arg_parser.add_argument('--sense-sgp30', action='store_true',
+	help='Read the SGP30 air quality sensor')
+arg_parser.add_argument('--sense-bme280', action='store_true',
+	help='Read the BME280 temperature/pressure/humidity sensor')
+arg_parser.add_argument('--prometheus-port', type=int, default=9092,
+	help='Port to export Prometheus metrics on')
+arg_parser.add_argument('--prometheus-python-metrics', action='store_true',
+	help='Include the default Python Prometheus metrics')
+arg_parser.add_argument('--output-stdout', action='store_true',
+	help='Output values to standard output')
+args = arg_parser.parse_args()
+
+if not (args.sense_sgp30 or args.sense_bme280):
+	arg_parser.print_help(file=sys.stderr)
+	sys.exit("\nNo sensors specified; this is probably not what you want."
+		" Refusing to do nothing.")
 
 # Metrics
-sgp30_co2 = Gauge('sgp30_co2_ppm', 'Equivalent carbon dioxide in parts per million')
-sgp30_tvoc = Gauge('sgp30_tvoc_ppb', 'Total volatile organic compounds in parts per billion')
-bme280_temperature = Gauge('bme280_temperature_celsius', 'Ambient temperature in celsius')
-bme280_pressure = Gauge('bme280_pressure_pascals', 'Barometric pressure in pascals')
-bme280_humidity = Gauge('bme280_humidity_ratio', 'Relative humidity')
+if not args.prometheus_python_metrics:
+	# Zap the default metrics, since we don't care at all about the health of this
+	# daemon; it's not business logic to instrument. If it's up, that's good enough.
+	# https://github.com/prometheus/client_python/issues/414
+	for coll in list(REGISTRY._collector_to_names.keys()):
+		REGISTRY.unregister(coll)
+
+sgp30_co2 = None
+sgp30_tvoc = None
+if args.sense_sgp30:
+	sgp30_co2 = Gauge('sgp30_co2_ppm', 'Equivalent carbon dioxide in parts per million')
+	sgp30_tvoc = Gauge('sgp30_tvoc_ppb', 'Total volatile organic compounds in parts per billion')
+
+bme280_temperature = None
+bme280_pressure = None
+bme280_humidity = None
+if args.sense_bme280:
+	bme280_temperature = Gauge('bme280_temperature_celsius', 'Ambient temperature in celsius')
+	bme280_pressure = Gauge('bme280_pressure_pascals', 'Barometric pressure in pascals')
+	bme280_humidity = Gauge('bme280_humidity_ratio', 'Relative humidity')
 
 # Sensors
-sys.stderr.write("Initializing SGP30\n")
-sgp30_sensor = SGP30()
-# We'll simply be down from Promethus' PoV while it warms up.
-# A better approach would probably be to offer no data for this metric yet.
-sys.stderr.write("SGP30 warming up, waiting 15s\n")
-sgp30_sensor.start_measurement()
+sgp30_sensor = None
+if args.sense_sgp30:
+	sys.stderr.write("Initializing SGP30\n")
+	from sgp30 import SGP30
+	sgp30_sensor = SGP30()
+	# We'll simply be down from Promethus' PoV while it warms up.
+	# A better approach would probably be to offer no data for this metric yet.
+	sys.stderr.write("SGP30 warming up, waiting 15s\n")
+	sgp30_sensor.start_measurement()
 
-sys.stderr.write("Initializing SMBus and BME280\n")
-smbus = SMBus(1)
-bme280_sensor = BME280(i2c_dev=smbus)
+bme280_sensor = None
+if args.sense_bme280:
+	sys.stderr.write("Initializing SMBus and BME280\n")
+	try:
+		from smbus2 import SMBus
+	except ImportError:
+		from smbus import SMBus
+	from bme280 import BME280
+	smbus = SMBus(1)
+	bme280_sensor = BME280(i2c_dev=smbus)
 
 # Start up the metric export.
 sys.stderr.write("Starting webserver and becoming ready\n")
-start_http_server(9092)
+start_http_server(args.prometheus_port)
 
 # Loop and poll sensors.
 # The SGP30 wants to be sampled every second, so we insist on driving the
@@ -52,24 +88,33 @@ start_http_server(9092)
 # here. But then that's another intermediary for what should be a very light
 # system.
 while True:
-	sgp30_result = sgp30_sensor.get_air_quality()
-	sgp30_co2.set(sgp30_result.equivalent_co2)
-	sgp30_tvoc.set(sgp30_result.total_voc)
+	stdout_line = None
+	if args.output_stdout:
+		stdout_line = datetime.now().strftime("%H:%M:%S")
 
-	bme280_sensor.update_sensor()
-	bme280_temperature.set(bme280_sensor.temperature)
-	# Pressure is given in hPa, Prometheus prefers base units; 1 hPa = 100 Pa.
-	bme280_pressure.set(bme280_sensor.pressure * 100.0)
-	# Humidity is given as a percentage; Prometheus prefers 0-1 scales.
-	bme280_humidity.set(bme280_sensor.humidity / 100.0)
+	if args.sense_sgp30:
+		sgp30_result = sgp30_sensor.get_air_quality()
+		sgp30_co2.set(sgp30_result.equivalent_co2)
+		sgp30_tvoc.set(sgp30_result.total_voc)
+		if args.output_stdout:
+			stdout_line += ' eCO2: {: 5d} ppm; TVOC: {: 5d} ppb'.format(
+				sgp30_result.equivalent_co2,
+				sgp30_result.total_voc)
 
-	# For debugging, print the results to stdout for now as well.
-	print('{} eCO2: {: 5d} ppm; TVOC: {: 5d} ppb; {:05.2f}°C {:05.2f}hPa {:05.2f}%'.format(
-		datetime.now().strftime("%H:%M:%S"),
-		sgp30_result.equivalent_co2,
-		sgp30_result.total_voc,
-		bme280_sensor.temperature,
-		bme280_sensor.pressure,
-		bme280_sensor.humidity))
+	if args.sense_bme280:
+		bme280_sensor.update_sensor()
+		bme280_temperature.set(bme280_sensor.temperature)
+		# Pressure is given in hPa, Prometheus prefers base units; 1 hPa = 100 Pa.
+		bme280_pressure.set(bme280_sensor.pressure * 100.0)
+		# Humidity is given as a percentage; Prometheus prefers 0-1 scales.
+		bme280_humidity.set(bme280_sensor.humidity / 100.0)
+		if args.output_stdout:
+			stdout_line += ' {:05.2f}°C {:05.2f}hPa {:05.2f}%'.format(
+				bme280_sensor.temperature,
+				bme280_sensor.pressure,
+				bme280_sensor.humidity)
+
+	if args.output_stdout:
+		print(stdout_line)
 
 	time.sleep(1.0)

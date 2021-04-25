@@ -44,9 +44,11 @@ See the Pimoroni instructions for each sensor module; they provide install scrip
 
 Alternatively, if you're wary of random scripts cluttering your system, it's good enough to `git clone` or download/unzip the libraries and symlink them to next to this daemon.
 
-### "Configure" prometheus-enviro-sensors
+### Configure prometheus-enviro-sensors
 
-Since anything configurable is currently a TODO, if you don't have exactly the set of sensors supported, or want to listen on a different port, edit `prometheus-enviro-sensors.py` and comment parts out to taste.
+Copy `prometheus-enviro-sensors.env` to `/etc/default/prometheus-enviro-sensors`. Note this removes the file extension.
+
+Edit the ARGS variable within to have the flags you want. The defaults should be OK if you have both supported sensor types and are happy with the default monitoring port. This only applies for running it as a service, which we're about to configure---when running on the command line, pass the flags you want directly.
 
 ### Configure systemd
 
@@ -59,7 +61,7 @@ Enable and start the service:
 ```shell
 sudo systemctl daemon-reload
 sudo systemctl enable prometheus-enviro-sensors.service
-sudo systemctl start prometheus-enviro-sensors.service 
+sudo systemctl start prometheus-enviro-sensors.service
 sudo systemctl status prometheus-enviro-sensors.service
 ```
 
@@ -138,20 +140,15 @@ Now you should be able to go to <http://localhost:9090/consoles/prometheus.html>
 
 There is absolutely no guarantee I'll ever get to any of this. It's an idea dumping ground. Pull requests welcome though.
 
-- Flag parsing to toggle features on and off.
-- Proper `/etc/defaults/` `$ARGV` for the systemd unit to handle flags.
-- Sensor support by flag.
-- STDOUT tracing by flag.
 - The SGP30 really wants a baseline value saved and restored when monitoring is interrupted, which is something the daemon could do on startup/shutdown, otherwise it takes up to 12 hours to recover properly. (This is very visible as readings plummeting down to minimums on a daemon restart.) See [discussion about it on the Adafruit forums](https://forums.adafruit.com/viewtopic.php?f=19&t=133097#p661509). The example code doesn't do this, but [the library has the methods for it](https://github.com/pimoroni/sgp30-python/blob/master/library/sgp30/__init__.py#L165). There's humidity compensation to apply too; see [section 3.16 of the driver integration guide](https://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/9_Gas_Sensors/Sensirion_Gas_Sensors_SGP30_Driver-Integration-Guide_SW_I2C.pdf). This *isn't* in Pimoroni's library, but looks easy enough to add, and the BME280 can measure the values needed.
 - Support more of the environmental sensors, like the relevant EnviroHat ones.
   - [LTR-559](https://shop.pimoroni.com/products/ltr-559-light-proximity-sensor-breakout) (light, proximity)
   - [MICS6814](https://shop.pimoroni.com/products/mics6814-gas-sensor-breakout) (CO, NO2, NH3)
 - Allow using the CPU temperature compensation logic that's in the examples for the BME280, for setups that have the board mounted directly over it. (I use a short GPIO ribbon cable.)
 - For that matter, implement `vcgencmd measure_temp` as an optional sensor, so it can be compensated for Prometheus-side with a computed metric if desired.
-- Configurable Prometheus metrics port instead of hardcoding 9092.
-- Optionally allow the stock Python metrics.
 - Bother to set up the console to support multiple instances.
 - Suggest some Prometheus alerts, like high CO/2 concentrations.
+- Consider doing some refactoring for sensors as a collection of instances of a subclass with register_metrics/init_sensor/measure methods, but this is a little tricksy due to the SGP30/BME280 interaction. Later, if/when there are more supported, perhaps.
 
 Bugs/nits:
 
