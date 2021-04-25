@@ -50,6 +50,13 @@ Copy `prometheus-enviro-sensors.env` to `/etc/default/prometheus-enviro-sensors`
 
 Edit the ARGS variable within to have the flags you want. The defaults should be OK if you have both supported sensor types and are happy with the default monitoring port. This only applies for running it as a service, which we're about to configure---when running on the command line, pass the flags you want directly.
 
+Create the directory used to persist the SGP30 baseline, if you're using that sensor:
+
+```shell
+sudo mkdir /var/lib/prometheus-enviro-sensors
+sudo chown ${USER}:$(groups | cut -f1 -d' ') /var/lib/prometheus-enviro-sensors
+```
+
 ### Configure systemd
 
 This will start the daemon automatically as a systemd service, and let it deal with running it in the background.
@@ -140,7 +147,7 @@ Now you should be able to go to <http://localhost:9090/consoles/prometheus.html>
 
 There is absolutely no guarantee I'll ever get to any of this. It's an idea dumping ground. Pull requests welcome though.
 
-- The SGP30 really wants a baseline value saved and restored when monitoring is interrupted, which is something the daemon could do on startup/shutdown, otherwise it takes up to 12 hours to recover properly. (This is very visible as readings plummeting down to minimums on a daemon restart.) See [discussion about it on the Adafruit forums](https://forums.adafruit.com/viewtopic.php?f=19&t=133097#p661509). The example code doesn't do this, but [the library has the methods for it](https://github.com/pimoroni/sgp30-python/blob/master/library/sgp30/__init__.py#L165). There's humidity compensation to apply too; see [section 3.16 of the driver integration guide](https://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/9_Gas_Sensors/Sensirion_Gas_Sensors_SGP30_Driver-Integration-Guide_SW_I2C.pdf). This *isn't* in Pimoroni's library, but looks easy enough to add, and the BME280 can measure the values needed.
+- There's humidity compensation to apply to the SGP30 too; see [section 3.16 of the driver integration guide](https://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/9_Gas_Sensors/Sensirion_Gas_Sensors_SGP30_Driver-Integration-Guide_SW_I2C.pdf). This *isn't* in Pimoroni's library, but looks easy enough to add, and the BME280 can measure the values needed.
 - Support more of the environmental sensors, like the relevant EnviroHat ones.
   - [LTR-559](https://shop.pimoroni.com/products/ltr-559-light-proximity-sensor-breakout) (light, proximity)
   - [MICS6814](https://shop.pimoroni.com/products/mics6814-gas-sensor-breakout) (CO, NO2, NH3)
@@ -153,11 +160,17 @@ There is absolutely no guarantee I'll ever get to any of this. It's an idea dump
 Bugs/nits:
 
 - The stderr messages *should* be going into the journal that `systemctl status` shows snippets from, but seem to be getting lost. This doesn't really matter since it's just startup messages.
+- The polling isn't really every second; that's a lower-bound assuming everything else is instant, but there are known `sleep`s in the sensor libraries.
+- The SGP30 baseline is not saved on graceful exit. This probably doesn't matter much since I don't think it's supposed to drift dramatically, so long as you're running the daemon for at least an hour.
 
 Really scope-creepy stuff:
 
 - Log to rrdtool as well, for more suitable long-term storage with downsampling.
 - Show metrics or possibly Prometheus alerts on mini breakout garden displays like the [ST7789](https://shop.pimoroni.com/products/1-3-spi-colour-lcd-240x240-breakout). For example, have an alert suggest an image and a priority as labels, and if there are any, show the highest one and the metric value, else keep the screen backlight off. This should be a separate process.
+
+## Thanks
+
+[Posters on the Adafruit forums](https://forums.adafruit.com/viewtopic.php?f=19&t=133097#p661509), for pointing out the SGP30 really wants its baseline value saved and restored when monitoring is interrupted, otherwise it takes up to 12 hours to recover properly. The example code doesn't do this, but [the library has the methods for it](https://github.com/pimoroni/sgp30-python/blob/master/library/sgp30/__init__.py#L165). This used to be really visible as readings plummeting down to minimums on a daemon restart.
 
 ## License
 

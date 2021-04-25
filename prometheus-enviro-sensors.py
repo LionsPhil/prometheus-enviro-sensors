@@ -4,9 +4,10 @@
 # Licensed under the EUPL-1.2-or-later.
 
 import argparse
+from datetime import datetime
+import json
 import sys
 import time
-from datetime import datetime
 
 from prometheus_client import REGISTRY, start_http_server, Gauge
 
@@ -18,6 +19,9 @@ from prometheus_client import REGISTRY, start_http_server, Gauge
 arg_parser = argparse.ArgumentParser(description='Export environment sensors to Prometheus.')
 arg_parser.add_argument('--sense-sgp30', action='store_true',
 	help='Read the SGP30 air quality sensor')
+arg_parser.add_argument('--sgp30-baseline-file',
+	default='/var/lib/prometheus-enviro-sensors/sgp30-baseline.json',
+	help='Filename for persisting the SGP30 baseline')
 arg_parser.add_argument('--sense-bme280', action='store_true',
 	help='Read the BME280 temperature/pressure/humidity sensor')
 arg_parser.add_argument('--prometheus-port', type=int, default=9092,
@@ -60,11 +64,34 @@ sgp30_sensor = None
 if args.sense_sgp30:
 	sys.stderr.write("Initializing SGP30\n")
 	from sgp30 import SGP30
+
+	baseline_eco2 = None
+	baseline_tvoc = None
+	try:
+		with open(args.sgp30_baseline_file) as baseline_file:
+			baseline = json.load(baseline_file)
+		baseline_timestamp = float(baseline['timestamp'])
+		# The one-week figure comes from the spec sheet, section 3.8:
+		# https://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/9_Gas_Sensors/Sensirion_Gas_Sensors_SGP30_Driver-Integration-Guide_SW_I2C.pdf
+		if baseline_timestamp < time.time() - 60*60*24*7:
+			raise RuntimeError('Baseline timestamp {} is older than one week'.format(
+				datetime.fromtimestamp(baseline_timestamp).isoformat()))
+		baseline_eco2 = int(baseline['eco2'])
+		baseline_tvoc = int(baseline['tvoc'])
+	except Exception as e:
+		sys.stderr.write("Bad baseline file, ignoring ({})\n".format(e))
+
 	sgp30_sensor = SGP30()
+	# It's a little ambiguous to me if this is supposed to happen regardless of
+	# a baseline being saved. It's safer to do it anyway, so we do.
 	# We'll simply be down from Promethus' PoV while it warms up.
 	# A better approach would probably be to offer no data for this metric yet.
 	sys.stderr.write("SGP30 warming up, waiting 15s\n")
 	sgp30_sensor.start_measurement()
+
+	if baseline_eco2 is not None and baseline_tvoc is not None:
+		sys.stderr.write("SGP30 restoring saved baseline\n")
+		sgp30_sensor.set_baseline(baseline_eco2, baseline_tvoc)
 
 bme280_sensor = None
 if args.sense_bme280:
@@ -87,6 +114,7 @@ start_http_server(args.prometheus_port)
 # some aliasing problems, and arguably the push gateway might be more correct
 # here. But then that's another intermediary for what should be a very light
 # system.
+elapsed = 0
 while True:
 	stdout_line = None
 	if args.output_stdout:
@@ -100,6 +128,23 @@ while True:
 			stdout_line += ' eCO2: {: 5d} ppm; TVOC: {: 5d} ppb'.format(
 				sgp30_result.equivalent_co2,
 				sgp30_result.total_voc)
+
+		if elapsed % 60*60 == 0:
+			# This is the recommended interval for persisting the baseline.
+			# It's a little dodgy to do this during the very first 12h, but
+			# we can't be sure which those are. We intentionally write back the
+			# baseline as soon as we start...this might also be a bit iffy.
+			try:
+				baseline_result = sgp30_sensor.get_baseline()
+				baseline_data = {
+					'timestamp': time.time(),
+					'eco2': baseline_result.equivalent_co2,
+					'tvoc': baseline_result.total_voc,
+				}
+				with open(args.sgp30_baseline_file, 'w') as baseline_file:
+					json.dump(baseline_data, baseline_file)
+			except Exception as e:
+				sys.stderr.write("Could not persist baseline, ignoring ({})\n".format(e))
 
 	if args.sense_bme280:
 		bme280_sensor.update_sensor()
@@ -118,3 +163,8 @@ while True:
 		print(stdout_line)
 
 	time.sleep(1.0)
+
+	# Wrap at one day to avoid long-running overflow/precision problems.
+	if elapsed >= 60*60*24:
+		elapsed = 0
+	elapsed += 1
