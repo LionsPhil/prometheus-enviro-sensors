@@ -22,6 +22,8 @@ Note that it does *not* currently support all the sensors in the Pimoroni [Envir
 
 If you want to use the modules above, it's probably easier to plug them into Pimoroni's [breakout garden](https://shop.pimoroni.com/products/breakout-garden-hat-i2c-spi) (there are versions for most Pi variants now). Then everything just plugs together, which is nice.
 
+If you have both the SGP30 and the BME280, the daemon will use the latter to provide humidity compensation data for the former; see [section 3.16 of the driver integration guide](https://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/9_Gas_Sensors/Sensirion_Gas_Sensors_SGP30_Driver-Integration-Guide_SW_I2C.pdf).
+
 ## Setup
 
 This lists every step to get this set up on Debian (including Raspbian). If you already have a Prometheus setup, skip parts as needed.
@@ -147,7 +149,6 @@ Now you should be able to go to <http://localhost:9090/consoles/prometheus.html>
 
 There is absolutely no guarantee I'll ever get to any of this. It's an idea dumping ground. Pull requests welcome though.
 
-- There's humidity compensation to apply to the SGP30 too; see [section 3.16 of the driver integration guide](https://www.sensirion.com/fileadmin/user_upload/customers/sensirion/Dokumente/9_Gas_Sensors/Sensirion_Gas_Sensors_SGP30_Driver-Integration-Guide_SW_I2C.pdf). This *isn't* in Pimoroni's library, but looks easy enough to add, and the BME280 can measure the values needed.
 - Support more of the environmental sensors, like the relevant EnviroHat ones.
   - [LTR-559](https://shop.pimoroni.com/products/ltr-559-light-proximity-sensor-breakout) (light, proximity)
   - [MICS6814](https://shop.pimoroni.com/products/mics6814-gas-sensor-breakout) (CO, NO2, NH3)
