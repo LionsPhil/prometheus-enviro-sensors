@@ -6,6 +6,7 @@
 import argparse
 from datetime import datetime
 import json
+import math
 import sys
 import time
 
@@ -22,6 +23,8 @@ arg_parser.add_argument('--sense-sgp30', action='store_true',
 arg_parser.add_argument('--sgp30-baseline-file',
 	default='/var/lib/prometheus-enviro-sensors/sgp30-baseline.json',
 	help='Filename for persisting the SGP30 baseline')
+arg_parser.add_argument('--sgp30-humidity-compensation', action='store_true',
+	help='Use the BME280 to provide the SGP30 with humidity values')
 arg_parser.add_argument('--sense-bme280', action='store_true',
 	help='Read the BME280 temperature/pressure/humidity sensor')
 arg_parser.add_argument('--prometheus-port', type=int, default=9092,
@@ -36,6 +39,9 @@ if not (args.sense_sgp30 or args.sense_bme280):
 	arg_parser.print_help(file=sys.stderr)
 	sys.exit("\nNo sensors specified; this is probably not what you want."
 		" Refusing to do nothing.")
+
+if args.sgp30_humidity_compensation and not (args.sense_sgp30 and args.sense_bme280):
+	sys.exit("Cannot perform humidity compensation without both SGP30 and BME280 sensors.")
 
 # Metrics
 if not args.prometheus_python_metrics:
@@ -103,6 +109,8 @@ if args.sense_bme280:
 	from bme280 import BME280
 	smbus = SMBus(1)
 	bme280_sensor = BME280(i2c_dev=smbus)
+	# The first value read seems to be kinda crazy sometimes. Discard it.
+	bme280_sensor.update_sensor()
 
 # Start up the metric export.
 sys.stderr.write("Starting webserver and becoming ready\n")
@@ -115,6 +123,7 @@ start_http_server(args.prometheus_port)
 # here. But then that's another intermediary for what should be a very light
 # system.
 elapsed = 0
+humidity_out_of_range_warned = False
 while True:
 	stdout_line = None
 	if args.output_stdout:
@@ -158,6 +167,32 @@ while True:
 				bme280_sensor.temperature,
 				bme280_sensor.pressure,
 				bme280_sensor.humidity)
+		if args.sgp30_humidity_compensation:
+			# Work out the absolute humidity using the formula in the SGP30
+			# driver integration guide, section 3.16. This seems to give values
+			# that are plausible vs climate data.
+			absolute_humidity = 216.7 * (
+				((bme280_sensor.humidity / 100.0) * 6.112 * math.exp((17.62 * bme280_sensor.temperature) / (243.12 + bme280_sensor.temperature)))
+				/ (273.15 + bme280_sensor.temperature)
+			) * 1000.0
+			if args.output_stdout:
+				stdout_line += ' {:05.2f}mg/m³'.format(absolute_humidity)
+			absolute_humidity = int(absolute_humidity)
+			# If it's out of range, we turn it *off*; we don't clamp to lies.
+			if absolute_humidity < 0 or absolute_humidity > 256000:
+				absolute_humidity = 0
+				if not humidity_out_of_range_warned:
+					sys.stderr.write("Computed absolute humidity of {}mg/m³ is out of range for SGP30! Disabling compensation.\n".format(
+						absolute_humidity))
+					humidity_out_of_range_warned = True
+			else:
+				if humidity_out_of_range_warned:
+					sys.stderr.write("Computed absolute humidity back in range at {}mg/m³, resuming compensation.\n".format(
+						absolute_humidity))
+					humidity_out_of_range_warned = False
+			# There's no function for this in the Python library, but there is
+			# a constant to still let us use the mid-level API.
+			sgp30_sensor.command('set_humidity', [absolute_humidity])
 
 	if args.output_stdout:
 		print(stdout_line)
