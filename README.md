@@ -8,9 +8,11 @@ This is absolutely a quick hack, to set expectations. But I did document it, so 
 
 ### Screenshot
 
-This is the console provided by the configuration below:
+This is the console provided by the default configuration below:
 
 ![Screenshot of sensor graphs](console-screenshot.png)
+
+(You can edit the Prometheus console template to your choosing, or write a different one, or even go do it via [Grafana](https://prometheus.io/docs/visualization/grafana/).)
 
 ### Supported sensors
 

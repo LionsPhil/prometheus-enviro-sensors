@@ -34,73 +34,78 @@
 {{ template "prom_content_head" . }}
   <h1>Environmental Sensors - {{ .Params.instance }}</h1>
 
-  <h3>Total Volatile Organic Compounds</h3>
-  <div id="tvocGraph"></div>
-  <script>
-  new PromConsole.Graph({
-    node: document.querySelector("#tvocGraph"),
-    expr: "sgp30_tvoc_ppb{job='enviro-sensors',instance='{{ .Params.instance }}'}",
-    name: "TVOC",
-    min: 0,
-    /* max: 60000, is what it's spec'd for, but silly-high */
-    yUnits: "ppb",
-    colorScheme: ["#ccaa00"], // Mnemonic: mustard for organics
-  })
-  </script>
+  <div style="display: flex">
+    <div style="flex: 1">
+      <h3>Equivalent CO/2</h3>
+      <div id="eco2Graph"></div>
+      <script>
+      new PromConsole.Graph({
+        node: document.querySelector("#eco2Graph"),
+        expr: "sgp30_co2_ppm{job='enviro-sensors',instance='{{ .Params.instance }}'}",
+        name: "eCO/2",
+        min: 400,
+        /* max: 60000, is what it's spec'd for, but silly-high */
+        yUnits: "ppm",
+        colorScheme: ["#00aa00"], // Mnemonic: green for plants
+      })
+      </script>
 
-  <h3>Equivalent CO/2</h3>
-  <div id="eco2Graph"></div>
-  <script>
-  new PromConsole.Graph({
-    node: document.querySelector("#eco2Graph"),
-    expr: "sgp30_co2_ppm{job='enviro-sensors',instance='{{ .Params.instance }}'}",
-    name: "eCO/2",
-    min: 400,
-    /* max: 60000, is what it's spec'd for, but silly-high */
-    yUnits: "ppm",
-    colorScheme: ["#00aa00"], // Mnemonic: green for plants
-  })
-  </script>
+      <h3>Temperature</h3>
+      <div id="tempGraph"></div>
+      <script>
+      new PromConsole.Graph({
+        node: document.querySelector("#tempGraph"),
+        expr: "bme280_temperature_celsius{job='enviro-sensors',instance='{{ .Params.instance }}'}",
+        name: "Temperature",
+        yUnits: "°C",
+        /* Range is -40 to 85°C, which is, again, excessive */
+        colorScheme: ["#aa0000"], // Mnemonic: red for hot
+      })
+      </script>
 
-  <h3>Temperature</h3>
-  <div id="tempGraph"></div>
-  <script>
-  new PromConsole.Graph({
-    node: document.querySelector("#tempGraph"),
-    expr: "bme280_temperature_celsius{job='enviro-sensors',instance='{{ .Params.instance }}'}",
-    name: "Temperature",
-    yUnits: "°C",
-    /* Range is -40 to 85°C, which is, again, excessive */
-    colorScheme: ["#aa0000"], // Mnemonic: red for hot
-  })
-  </script>
+      <h3>Relative humidity</h3>
+      <div id="humidGraph"></div>
+      <script>
+      new PromConsole.Graph({
+        node: document.querySelector("#humidGraph"),
+        expr: "bme280_humidity_ratio{job='enviro-sensors',instance='{{ .Params.instance }}'} * 100",
+        name: "Humidity",
+        yUnits: "%",
+        /* Relative humidity actually has a fairly sensible 0 to 100 range,
+        but it's more interesting to see the tiny trends. */
+        colorScheme: ["#0000aa"], // Mnemonic: blue for wet
+      })
+      </script>
+    </div>
+    <div style="flex: 1">
+      <h3>Total Volatile Organic Compounds</h3>
+      <div id="tvocGraph"></div>
+      <script>
+      new PromConsole.Graph({
+        node: document.querySelector("#tvocGraph"),
+        expr: "sgp30_tvoc_ppb{job='enviro-sensors',instance='{{ .Params.instance }}'}",
+        name: "TVOC",
+        min: 0,
+        /* max: 60000, is what it's spec'd for, but silly-high */
+        yUnits: "ppb",
+        colorScheme: ["#ccaa00"], // Mnemonic: mustard for organics
+      })
+      </script>
 
-  <h3>Relative humidity</h3>
-  <div id="humidGraph"></div>
-  <script>
-  new PromConsole.Graph({
-    node: document.querySelector("#humidGraph"),
-    expr: "bme280_humidity_ratio{job='enviro-sensors',instance='{{ .Params.instance }}'} * 100",
-    name: "Humidity",
-    yUnits: "%",
-    /* Relative humidity actually has a fairly sensible 0 to 100 range,
-    but it's more interesting to see the tiny trends. */
-    colorScheme: ["#0000aa"], // Mnemonic: blue for wet
-  })
-  </script>
-
-  <h3>Pressure</h3>
-  <div id="presGraph"></div>
-  <script>
-  new PromConsole.Graph({
-    node: document.querySelector("#presGraph"),
-    expr: "bme280_pressure_pascals{job='enviro-sensors',instance='{{ .Params.instance }}'}",
-    name: "Pressure",
-    yUnits: "Pa",
-    /* Range is 300 to 1100 hPa (note: unit is Pa), which is, again, excessive */
-    colorScheme: ["#aa00cc"], // Mnemonic: not really
-  })
-  </script>
+      <h3>Pressure</h3>
+      <div id="presGraph"></div>
+      <script>
+      new PromConsole.Graph({
+        node: document.querySelector("#presGraph"),
+        expr: "bme280_pressure_pascals{job='enviro-sensors',instance='{{ .Params.instance }}'}",
+        name: "Pressure",
+        yUnits: "Pa",
+        /* Range is 300 to 1100 hPa (note: unit is Pa), which is, again, excessive */
+        colorScheme: ["#aa00cc"], // Mnemonic: not really
+      })
+      </script>
+    </div>
+  </div>
 
 {{ template "prom_content_tail" . }}
 
