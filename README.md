@@ -40,9 +40,17 @@ sudo apt install --no-install-recommends prometheus
 
 Avoiding the recommended dependencies avoids installing a daemon set up for collecting system information, which you presumably do not care about.
 
-### Install the sensor libraries
+### Install the Prometheus Python client library
 
 > **Caution:** Python is kinda in a mess about the 2 to 3 migration, *still.* If getting dependencies via Debian packages, make sure you're consistent about if you install `3` versions. If using pip, make sure you're consistent about using `pip` or `pip3`. The provided systemd file below assumes you're explicitly using Python 3.
+
+> **Note:** `pip` installs things per-user. If you're planning to run the daemon as a different user, run `pip` as that user too.
+
+```shell
+pip3 install prometheus-client
+```
+
+### Install the sensor libraries
 
 See the Pimoroni instructions for each sensor module; they provide install scripts or `pip install` targets.
 
