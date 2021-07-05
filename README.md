@@ -157,6 +157,37 @@ Copy or link `env-sensors.htm` into `/etc/prometheus/consoles`.
 
 Now you should be able to go to <http://localhost:9090/consoles/prometheus.html>, then use the navigation at the top left to look at your sensors as graphs. This is particularly handy from some *other* computer. Use the time controls at the bottom to see how air properties change throughout the day.
 
+#### Moving the database
+
+Prometheus [stores data](https://prometheus.io/docs/prometheus/latest/storage/) via a write-ahead log, and you can't turn this off, because it's designed to not lose metrics for monitoring something important.
+
+Since this implies making a bunch of writes, you might want to move it off the SD card your Raspbian install is on. I don't have data for if this is a real concern, and SD cards do apparently have hardware wear levelling, so it's probably fine.
+
+Still, if you want to move the database to a USB stick, for example one of the tiny ones that fits almost entirely within the socket:
+
+- Use `lsblk` to find the right device for the USB stick. Set a variable: \
+  `DEVICE=/dev/sdz1`
+- Format it as a Linux filesystem; don't use FAT: \
+  `sudo mkfs.ext4 -v -L 'prometheuslogs' ${DEVICE:?}`.
+- Mount it to a temporary directory: \
+  `mkdir /tmp/plogs && sudo mount ${DEVICE:?} /tmp/plogs`
+- Stop Prometheus: \
+  `sudo systemctl stop prometheus.service`
+- Move the data:
+  `sudo mv -iv /var/lib/prometheus/metrics2 /tmp/plogs/`
+- Add a line to `/etc/fstab` to mount the device over the Prometheus data directory: \
+  `LABEL=prometheuslogs /var/lib/prometheus  ext4  errors=remount-ro,nodev,barrier=1,journal_checksum,nofail  0  0`
+- Unmount the temporary directory, and remount in its new home: \
+  `sudo umount /tmp/plogs && rmdir /tmp/plogs && sudo mount /var/lib/prometheus`
+- Check the `metrics2` directory is still there: \
+  `ll /var/lib/prometheus`
+- Start Prometheus back up: \
+  `sudo systemctl start prometheus.service`
+
+Careful: if you start your Pi without the USB stick attached, it will boot, but Prometheus might start logging a new, separate history on the SD card again, since it's your root filesystem. (I'm not sure if it will recreate the `metrics2` directory.)
+
+If you'd rather have the USB key mounted elsewhere, you could also set `--storage.tsdb.path` under `/etc/default/prometheus` to point to a path under it instead.
+
 ### Configure Grafana
 
 Optional, but has a nicer dashboard, that displays in local timezone and works better on mobile.
