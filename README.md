@@ -6,13 +6,15 @@ This is a small python daemon (and some sample configuration) that plumbs some e
 
 This is absolutely a quick hack, to set expectations. But I did document it, so it's got that going for it.
 
-### Screenshot
+### Screenshots
 
 This is the console provided by the default configuration below:
 
 ![Screenshot of sensor graphs](console-screenshot.png)
 
-(You can edit the Prometheus console template to your choosing, or write a different one, or even go do it via [Grafana](https://prometheus.io/docs/visualization/grafana/).)
+You can edit the Prometheus console template to your choosing, or write a different one, or even go do it via [Grafana](https://prometheus.io/docs/visualization/grafana/):
+
+![Screenshot of sensor graphs via Grafana](grafana.png)
 
 ### Supported sensors
 
@@ -154,6 +156,24 @@ Update `lounge` to match the instance name you used above.
 Copy or link `env-sensors.htm` into `/etc/prometheus/consoles`.
 
 Now you should be able to go to <http://localhost:9090/consoles/prometheus.html>, then use the navigation at the top left to look at your sensors as graphs. This is particularly handy from some *other* computer. Use the time controls at the bottom to see how air properties change throughout the day.
+
+### Configure Grafana
+
+Optional, but has a nicer dashboard, that displays in local timezone and works better on mobile.
+
+Grafana have [instructions for installing on Raspbian](https://grafana.com/tutorials/install-grafana-on-raspberry-pi/). Follow the "Install Granafa" section to set up the APT respository, but *don't* start the server yet.
+
+For a personal install, you probably want to edit `/etc/grafana/grafana.ini` and change some things:
+
+- Under `[analytics]`&hellip;
+  - &hellip;set `reporting_enabled` to `false`. (Don't phone home that it's running.)
+  - &hellip;set `check_for_updates` to `false`. (APT will do this for you.)
+- Under `[security]`, set `disable_gravatar` to `true`. (This will stop it making external web requests for profile pictures you're not using.)
+- Under `[alerting]`, set `enabled` to `false`. (This is Prometheus' job, if you want it.)
+
+Then you can resume the setup instructions with starting the server and logging in. Check the Grafana documentation for how to build a dashboard. (It's less amicable to shipping a stock one since it wraps all its config in a SQLite database.) See the screenshot above for inspiration.
+
+The metrics you want to plot will be named like the Prometheus queries for its console, e.g. `sgp30_co2_ppm{job='enviro-sensors',instance='lounge'}`. You can set units for them under "Field", and set up some thresholds (these aren't alerts, just lines). Change the color before clicking the legend (then consider turning the legend off).
 
 ## TODO
 
