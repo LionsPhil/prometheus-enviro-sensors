@@ -37,6 +37,8 @@ class Metric(Enum):
 
     @property
     def fgcolor(self):
+        # If you're worried about burn-in, make sure each component goes to
+        # 0x00 for at least one metric which you are displaying.
         return {
             'sgp30_co2_ppm': (0x55, 0xff, 0x00),
             'bme280_temperature_celsius': (0xff, 0x55, 0x00),
@@ -73,14 +75,16 @@ arg_parser.add_argument('--lookback', type=float,
     default=60.0,
     help='Seconds to look back to determine trends')
 arg_parser.add_argument('--delay', type=float,
-    default=2.0,
+    default=3.0,
     help='Seconds to hold each metric before moving to the next')
 arg_parser.add_argument('--font',
     default='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
     help='Font file to for display')
 arg_parser.add_argument('--top-fraction', type=float,
-    default=0.8,
+    default=0.75,
     help='Vertical proportion of the display to use for the metric value')
+arg_parser.add_argument('--reverse-bottom-bar', action='store_true',
+    help='Draw the units and trend bar in reverse video')
 arg_parser.add_argument('--max-age', type=float,
     default=60.0,
     help='Maximum tolerate age of sensor values before ignoring')
@@ -216,7 +220,7 @@ def main():
             temp_font_size -= 1
             if temp_font_size == 0:
                 raise RuntimeError("Somehow couldn't fit any bottom font size?")
-    sys.stderr.write("Fonts ready.\n")
+    sys.stderr.write("Fonts ready, beginning display.\n")
 
     while True:
         for metric in args.metrics:
@@ -236,7 +240,6 @@ def main():
             value_y = (height_for_value - h) / 2
 
             (w, h) = draw.textsize(metric.units, font_for_bottom)
-            #unit_y = (disp.height-1) - h
             unit_y = ((height_for_bottom - h) / 2) + height_for_value
 
             # TODO: Trending indicator; this is currently lies
@@ -245,13 +248,24 @@ def main():
             trend_x = (disp.width-1) - w
             trend_y = ((height_for_bottom - h) / 2) + height_for_value
 
-            draw.rectangle((0, 0, disp.width-1, disp.height-1), metric.bgcolor)
+            bottom_color=None
+            if args.reverse_bottom_bar:
+                draw.rectangle(
+                    (0, 0, disp.width, height_for_value),
+                    metric.bgcolor)
+                draw.rectangle(
+                    (0, height_for_value, disp.width, disp.height),
+                    metric.fgcolor)
+                bottom_color=metric.bgcolor
+            else:
+                draw.rectangle((0, 0, disp.width, disp.height), metric.bgcolor)
+                bottom_color=metric.fgcolor
             draw.text((value_x, value_y), value_text,
                 font=value_font, fill=metric.fgcolor)
             draw.text((0, unit_y), metric.units,
-                font=font_for_bottom, fill=metric.fgcolor)
+                font=font_for_bottom, fill=bottom_color)
             draw.text((trend_x, trend_y), trend_text,
-                font=font_for_bottom, fill=metric.fgcolor)
+                font=font_for_bottom, fill=bottom_color)
             disp.display(img)
             time.sleep(args.delay)
 
@@ -259,7 +273,15 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        # Turn off the display on the way out
-        sys.stderr.write("Turning off display.\n")
+        # Blank and turn off the display on the way out.
+        # If we don't blank as well, when the Pi turns off, the backlight will
+        # come back on, and show whatever was last displayed---wrong values.
+        sys.stderr.write("Blanking and turning off display.\n")
+        img = Image.new('RGB', (disp.width, disp.height), color=(0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle((0, 0, disp.width, disp.height), (0, 0, 0))
+        if not args.debug_display:
+            # Just a little annoying to pop up one last black rectangle.
+            disp.display(img)
         disp.set_backlight(False)
         sys.exit(0)
