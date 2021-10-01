@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # Daemon to export various Pimoroni environment sensors to Prometheus.
 # Copyright 2021 Philip Boulain,
 # with parts derived from MIT-licensed Pimoroni example code.
