@@ -44,18 +44,19 @@ class Metric(Enum):
             'bme280_humidity_ratio': (0x00, 0xaa, 0xff),
         }[self.value]
 
+    @property
+    def units(self):
+        return {
+            'sgp30_co2_ppm': 'ppm',
+            'bme280_temperature_celsius': '°C',
+            'bme280_humidity_ratio': '%',
+        }[self.value]
+
     def format(self, value):
         return {
             'sgp30_co2_ppm': '{:n}'.format(value),
             'bme280_temperature_celsius': '{:.1f}'.format(value),
             'bme280_humidity_ratio': '{:d}'.format(round(value * 100.0)),
-        }[self.value]
-
-    def units(self, value):
-        return {
-            'sgp30_co2_ppm': 'ppm',
-            'bme280_temperature_celsius': '°C',
-            'bme280_humidity_ratio': '%',
         }[self.value]
 
 arg_parser = argparse.ArgumentParser(description='Display sensor trends on ST7789.')
@@ -77,6 +78,9 @@ arg_parser.add_argument('--delay', type=float,
 arg_parser.add_argument('--font',
     default='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
     help='Font file to for display')
+arg_parser.add_argument('--top-fraction', type=float,
+    default=0.8,
+    help='Vertical proportion of the display to use for the metric value')
 arg_parser.add_argument('--max-age', type=float,
     default=60.0,
     help='Maximum tolerate age of sensor values before ignoring')
@@ -177,12 +181,42 @@ def get_metric(metric, instance, job='enviro-sensors', at_time=None):
 def main():
     img = Image.new('RGB', (disp.width, disp.height), color=(0, 0, 0))
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(args.font, 30)
 
-    # TODO: The intent is to have a big font for the value and a small font
-    # for the units and an up/down/equal trend marker, and scale and position
-    # them sensibly for the display.
-    # Consider using draw.textsize(string, font) to measure...
+    sys.stderr.write("Finding font sizes to use...\n")
+    fonts_for_digits = {}
+    # CO2 should be the highest, maxed out at 60,000 (six chars with comma).
+    MAX_DIGITS = 6
+    temp_font_size = 0
+    height_for_value = disp.height * args.top_fraction
+    height_for_bottom = (disp.height-1) - height_for_value
+    for digits in range(MAX_DIGITS, 0, -1):
+        (w, h) = (0, 0)
+        last_font = None
+        temp_font = None
+        while w < disp.width and h < height_for_value:
+            last_font = temp_font
+            temp_font_size += 1
+            temp_font = ImageFont.truetype(args.font, temp_font_size)
+            # This assumes 8 is no narrower than any other digit.
+            (w, h) = draw.textsize("8" * digits, temp_font)
+        fonts_for_digits[digits] = last_font
+        temp_font_size -= 1 # Resume from the *same* size for fewer digits.
+        sys.stderr.write(f"For {digits} digits, use {temp_font_size}pt\n")
+    fonts_for_digits[0] = fonts_for_digits[1] # Just in case of empty string.
+
+    font_for_bottom = None
+    while font_for_bottom == None:
+        temp_font = ImageFont.truetype(args.font, temp_font_size)
+        # Use 'W' as a wide character for 3x units, space, and trend glyph.
+        (w, h) = draw.textsize("WWW W" * digits, temp_font)
+        if h <= height_for_bottom:
+            font_for_bottom = temp_font
+            sys.stderr.write(f"For units and trend, use {temp_font_size}pt\n")
+        else:
+            temp_font_size -= 1
+            if temp_font_size == 0:
+                raise RuntimeError("Somehow couldn't fit any bottom font size?")
+    sys.stderr.write("Fonts ready.\n")
 
     while True:
         for metric in args.metrics:
@@ -195,8 +229,29 @@ def main():
                 # (Instead it should show an X or something.)
                 raise
 
-            draw.rectangle((0, 0, disp.width, disp.height), metric.bgcolor)
-            draw.text((0, 0), metric.format(value), font=font, fill=metric.fgcolor)
+            value_text = metric.format(value)
+            value_font = fonts_for_digits[min(len(value_text), MAX_DIGITS)]
+            (w, h) = draw.textsize(value_text, value_font)
+            value_x = (disp.width - w) / 2
+            value_y = (height_for_value - h) / 2
+
+            (w, h) = draw.textsize(metric.units, font_for_bottom)
+            #unit_y = (disp.height-1) - h
+            unit_y = ((height_for_bottom - h) / 2) + height_for_value
+
+            # TODO: Trending indicator; this is currently lies
+            trend_text = "↗" # "→", "↘"
+            (w, h) = draw.textsize(trend_text, font_for_bottom)
+            trend_x = (disp.width-1) - w
+            trend_y = ((height_for_bottom - h) / 2) + height_for_value
+
+            draw.rectangle((0, 0, disp.width-1, disp.height-1), metric.bgcolor)
+            draw.text((value_x, value_y), value_text,
+                font=value_font, fill=metric.fgcolor)
+            draw.text((0, unit_y), metric.units,
+                font=font_for_bottom, fill=metric.fgcolor)
+            draw.text((trend_x, trend_y), trend_text,
+                font=font_for_bottom, fill=metric.fgcolor)
             disp.display(img)
             time.sleep(args.delay)
 
