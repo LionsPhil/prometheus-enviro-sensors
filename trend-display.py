@@ -65,7 +65,7 @@ class Metric(Enum):
     @property
     def units(self):
         return {
-            'sgp30_co2_ppm': 'ppm',
+            'sgp30_co2_ppm': 'ppm', # Try smallcap ᴘᴘᴍ to avoid descenders.
             'bme280_temperature_celsius': '°C',
             'bme280_humidity_ratio': '%',
         }[self.value]
@@ -76,6 +76,9 @@ class Metric(Enum):
             'bme280_temperature_celsius': '{:.1f}'.format(value),
             'bme280_humidity_ratio': '{:d}'.format(round(value * 100.0)),
         }[self.value]
+
+# Nasty hack for font measuring purposes.
+METRIC_LONGEST_UNITS=Metric.sgp30_co2_ppm.units
 
 arg_parser = argparse.ArgumentParser(description='Display sensor trends on ST7789.')
 arg_parser.add_argument('--prometheus',
@@ -100,16 +103,16 @@ arg_parser.add_argument('--font',
     default='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
     help='Font file to for display')
 arg_parser.add_argument('--trend-rising',
-    default='↗',
+    default='⬈',
     help='String to use for rising trend')
 arg_parser.add_argument('--trend-steady',
-    default='→',
+    default='→', # U+2B95: RIGHTWARDS BLACK ARROW is a weird outlier.
     help='String to use for steady trend (sets the allocated width)')
 arg_parser.add_argument('--trend-falling',
-    default='↘',
+    default='⬊',
     help='String to use for falling trend')
 arg_parser.add_argument('--top-fraction', type=float,
-    default=0.75,
+    default=0.67,
     help='Vertical proportion of the display to use for the metric value')
 arg_parser.add_argument('--reverse-bottom-bar', action='store_true',
     help='Draw the units and trend bar in reverse video')
@@ -243,8 +246,7 @@ def main():
     font_for_bottom = None
     while font_for_bottom == None:
         temp_font = ImageFont.truetype(args.font, temp_font_size)
-        # Use 'W' as a wide character for 3x units, then space and trend.
-        (w, h) = draw.textsize(f"WWW {args.trend_steady}", temp_font)
+        (w, h) = draw.textsize(f"{METRIC_LONGEST_UNITS} {args.trend_steady}", temp_font)
         if h <= height_for_bottom:
             font_for_bottom = temp_font
             sys.stderr.write(f"For units and trend, use {temp_font_size}pt\n")
