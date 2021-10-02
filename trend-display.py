@@ -58,9 +58,9 @@ class Metric(Enum):
         # 0x00 for at least one metric which you are displaying.
         return {
             'sgp30_co2_ppm': (0x55, 0xff, 0x00),
-            'bme280_temperature_celsius': (0xff, 0x55, 0x00),
+            'bme280_temperature_celsius': (0xff, 0xaa, 0x00),
             # Because blue is so dark, we boost it a bit with more green.
-            'bme280_humidity_ratio': (0x00, 0xaa, 0xff),
+            'bme280_humidity_ratio': (0x00, 0xcc, 0xff),
         }[self.value]
 
     @property
@@ -75,11 +75,15 @@ class Metric(Enum):
         return {
             'sgp30_co2_ppm': '{:n}'.format(value),
             'bme280_temperature_celsius': '{:.1f}'.format(value),
-            'bme280_humidity_ratio': '{:d}'.format(round(value * 100.0)),
+            # '{:d}'.format(round(value * 100.0)) looks good for chunky fonts
+            # like DejaVuSans; this looks better for thin ones line Antonio.
+            'bme280_humidity_ratio': '{:.1f}'.format(value*100.0),
         }[self.value]
 
-# Nasty hack for font measuring purposes.
+# Static hacks for font measuring purposes.
 METRIC_LONGEST_UNITS=Metric.sgp30_co2_ppm.units
+# CO2 should be the highest, maxed out at 60,000 (six chars with comma).
+MAX_DIGITS = 6
 
 arg_parser = argparse.ArgumentParser(description='Display sensor trends on ST7789.')
 arg_parser.add_argument('--prometheus',
@@ -103,6 +107,7 @@ arg_parser.add_argument('--delay', type=float,
 arg_parser.add_argument('--font',
     default='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
     help='Font file to for display')
+# Other trend chars to try: '▲▬▼', '/-\' (safe ASCII)
 arg_parser.add_argument('--trend-rising',
     default='⬈',
     help='String to use for rising trend')
@@ -143,7 +148,7 @@ if args.debug_display:
         def display(self, image):
             sys.stderr.write(f"Dummy display {image}\n")
             image.show()
-        
+
         def set_backlight(self, value):
             pass
 
@@ -218,32 +223,30 @@ def get_metric(metric, instance, job='enviro-sensors', at_time=None):
         # https://prometheus.io/docs/prometheus/latest/querying/api/#instant-queries
         raise GetMetricError('Got unexpected JSON from Prometheus') from err
 
-def main():
-    img = Image.new('RGB', (disp.width, disp.height), color=(0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    sys.stderr.write("Finding font sizes to use...\n")
+def calculate_font_sizes(disp, draw, height_for_value, height_for_bottom, digits):
+    """Returns a tuple of dict of digits->font, and a bottom font."""
     fonts_for_digits = {}
-    # CO2 should be the highest, maxed out at 60,000 (six chars with comma).
-    MAX_DIGITS = 6
+    last_font = None
+    temp_font = None
     temp_font_size = 0
-    height_for_value = disp.height * args.top_fraction
-    height_for_bottom = (disp.height-1) - height_for_value
     for digits in range(MAX_DIGITS, 0, -1):
         (w, h) = (0, 0)
-        last_font = None
-        temp_font = None
         while w < disp.width and h < height_for_value:
             last_font = temp_font
             temp_font_size += 1
             temp_font = ImageFont.truetype(args.font, temp_font_size)
             # This assumes 8 is no narrower than any other digit.
             (w, h) = draw.textsize("8" * digits, temp_font)
-        fonts_for_digits[digits] = last_font
-        temp_font_size -= 1 # Resume from the *same* size for fewer digits.
+        # Wind back, so we use the last one that fit, and also resume from here
+        # finding the size for fewer digits.
+        temp_font = last_font
+        temp_font_size -= 1
+        fonts_for_digits[digits] = temp_font
         sys.stderr.write(f"For {digits} digits, use {temp_font_size}pt\n")
     fonts_for_digits[0] = fonts_for_digits[1] # Just in case of empty string.
 
+    # Work back downward to find the bottom font; we assume it can't be bigger
+    # than the font size for a single top character.
     font_for_bottom = None
     while font_for_bottom == None:
         temp_font = ImageFont.truetype(args.font, temp_font_size)
@@ -255,6 +258,19 @@ def main():
             temp_font_size -= 1
             if temp_font_size == 0:
                 raise RuntimeError("Somehow couldn't fit any bottom font size?")
+
+    return (fonts_for_digits, font_for_bottom)
+
+def main():
+    img = Image.new('RGB', (disp.width, disp.height), color=(0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    height_for_value = disp.height * args.top_fraction
+    height_for_bottom = (disp.height-1) - height_for_value
+
+    sys.stderr.write("Finding font sizes to use...\n")
+    (fonts_for_digits, font_for_bottom) = calculate_font_sizes(
+        disp, draw, height_for_value, height_for_bottom, MAX_DIGITS)
     sys.stderr.write("Fonts ready, beginning display.\n")
 
     while True:
