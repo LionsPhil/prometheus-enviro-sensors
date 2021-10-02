@@ -32,6 +32,22 @@ class Metric(Enum):
         return self.value
 
     @property
+    def epsilon(self):
+        """How far away a value can be to be trending 'level'."""
+        # This doesn't compensate for non-default --lookback; assumes 10mins.
+        # To some extent, this should be the inverse of normal range;
+        # i.e. how much it can swing within indoor norms in 10 minutes.
+        return {
+            # 400~2400 => 2000 range => 100 is 5% of it
+            # Drifts more dramatically in my experience
+            'sgp30_co2_ppm': 100,
+            # 20~25 => 5 range => 0.1 is 2% of it
+            'bme280_temperature_celsius': 0.1,
+            # 30~50 => 20 range => 0.4 is 2% of it
+            'bme280_humidity_ratio': 0.4,
+        }[self.value]
+
+    @property
     def bgcolor(self):
         return (0x00, 0x00, 0x00)
 
@@ -72,22 +88,31 @@ arg_parser.add_argument('--metrics', nargs='+', type=Metric,
     default=[Metric.sgp30_co2_ppm, Metric.bme280_temperature_celsius, Metric.bme280_humidity_ratio],
 	help='Metrics to show')
 arg_parser.add_argument('--lookback', type=float,
-    default=60.0,
+    default=600.0,
     help='Seconds to look back to determine trends')
+arg_parser.add_argument('--max-age', type=float,
+    default=60.0,
+    help='Maximum tolerate age of sensor values before ignoring')
 arg_parser.add_argument('--delay', type=float,
     default=3.0,
     help='Seconds to hold each metric before moving to the next')
 arg_parser.add_argument('--font',
     default='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
     help='Font file to for display')
+arg_parser.add_argument('--trend-rising',
+    default='↗',
+    help='String to use for rising trend')
+arg_parser.add_argument('--trend-steady',
+    default='→',
+    help='String to use for steady trend (sets the allocated width)')
+arg_parser.add_argument('--trend-falling',
+    default='↘',
+    help='String to use for falling trend')
 arg_parser.add_argument('--top-fraction', type=float,
     default=0.75,
     help='Vertical proportion of the display to use for the metric value')
 arg_parser.add_argument('--reverse-bottom-bar', action='store_true',
     help='Draw the units and trend bar in reverse video')
-arg_parser.add_argument('--max-age', type=float,
-    default=60.0,
-    help='Maximum tolerate age of sensor values before ignoring')
 arg_parser.add_argument('--socket', type=BreakoutSocket,
     choices=list(BreakoutSocket), default=BreakoutSocket.back,
     help='Breakout socket display is plugged into, or custom')
@@ -153,6 +178,15 @@ def get_metric(metric, instance, job='enviro-sensors', at_time=None):
         response.raise_for_status()
     except requests.RequestException as err:
         raise GetMetricError('HTTP error querying Prometheus') from err
+
+    # Now we've made the query, if it was for "now" (no time argument),
+    # remember when we asked. This makes "too old" checking consistent for
+    # both live and historic lookups.
+    # (If you were wondering why the parameter was at_time, here it is.
+    # Ugh. Horrible shadowing/namespacing problems.)
+    if at_time == None:
+        at_time = time.time()
+
     data = None
     try:
         data = response.json()
@@ -164,17 +198,15 @@ def get_metric(metric, instance, job='enviro-sensors', at_time=None):
         for result in data['data']['result']:
             rm = result['metric']
             if rm['instance'] == instance and rm['job'] == job:
-                # If you were wondering why the parameter was at_time, here it
-                # is. Ugh. Horrible shadowing/namespacing problems.
-                age = time.time() - result['value'][0]
+                age = at_time - result['value'][0]
                 if age <= args.max_age:
                     v = result['value'][1]
                     try:
                         return float(v)
                     except ValueError as err:
-                        raise GetMetricError(f"Bad metric value '{v}'' from Prometheus") from err
+                        raise GetMetricError(f"Bad metric value '{v}' from Prometheus") from err
                 else:
-                    raise GetMetricError(f"Data from Prometheus for '{metric}'' instance=\"{instance}\", job=\"{job}\" is too old ({age} > {args.max_age} seconds)")
+                    raise GetMetricError(f"Data from Prometheus for '{metric}' instance=\"{instance}\", job=\"{job}\" is too old ({age} > {args.max_age} seconds)")
         # Didn't find it in results
         raise GetMetricError(f"No data from Prometheus for {metric} instance=\"{instance}\", job=\"{job}\"")
     except KeyError as err:
@@ -211,8 +243,8 @@ def main():
     font_for_bottom = None
     while font_for_bottom == None:
         temp_font = ImageFont.truetype(args.font, temp_font_size)
-        # Use 'W' as a wide character for 3x units, space, and trend glyph.
-        (w, h) = draw.textsize("WWW W" * digits, temp_font)
+        # Use 'W' as a wide character for 3x units, then space and trend.
+        (w, h) = draw.textsize(f"WWW {args.trend_steady}", temp_font)
         if h <= height_for_bottom:
             font_for_bottom = temp_font
             sys.stderr.write(f"For units and trend, use {temp_font_size}pt\n")
@@ -225,13 +257,27 @@ def main():
     while True:
         for metric in args.metrics:
             value = None
+            historic = None
             try:
                 value = get_metric(metric, args.instance)
+                historic = get_metric(metric, args.instance,
+                    at_time=time.time() - args.lookback)
             except GetMetricError as err:
                 sys.stderr.write(f"{err}\n")
                 # TODO: This is not intended to be fatal, but is for now.
                 # (Instead it should show an X or something.)
+                # When unfatal-ing this, 'historic' failing should only
+                # invalidate the trend, not the whole thing.
                 raise
+
+            change = value - historic
+            trend_text = None
+            if abs(change) < metric.epsilon:
+                trend_text = args.trend_steady
+            elif change > 0:
+                trend_text = args.trend_rising
+            else:
+                trend_text = args.trend_falling
 
             value_text = metric.format(value)
             value_font = fonts_for_digits[min(len(value_text), MAX_DIGITS)]
@@ -242,8 +288,6 @@ def main():
             (w, h) = draw.textsize(metric.units, font_for_bottom)
             unit_y = ((height_for_bottom - h) / 2) + height_for_value
 
-            # TODO: Trending indicator; this is currently lies
-            trend_text = "↗" # "→", "↘"
             (w, h) = draw.textsize(trend_text, font_for_bottom)
             trend_x = (disp.width-1) - w
             trend_y = ((height_for_bottom - h) / 2) + height_for_value
