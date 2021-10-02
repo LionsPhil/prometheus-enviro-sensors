@@ -12,8 +12,6 @@ from enum import Enum
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
-# TODO Add python3-requests and python3-pil to Debian package list in docs.
-
 class BreakoutSocket(Enum):
     front = 'front'
     back = 'back'
