@@ -38,13 +38,14 @@ class Metric(Enum):
         # To some extent, this should be the inverse of normal range;
         # i.e. how much it can swing within indoor norms in 10 minutes.
         return {
-            # 400~2400 => 2000 range => 100 is 5% of it
-            # Drifts more dramatically in my experience
+            # 400~2400 => 2000 range => 100 is 5% of it.
             'sgp30_co2_ppm': 100,
-            # 20~25 => 5 range => 0.1 is 2% of it
+            # 20~25 => 5 range => 0.1 is 2% of it.
+            # This one feels it should be a bit more sensitive.
             'bme280_temperature_celsius': 0.1,
-            # 30~50 => 20 range => 0.4 is 2% of it
-            'bme280_humidity_ratio': 0.4,
+            # 30~50 => 20 range => 0.1 is 5% of it.
+            # But remember this is a ratio, not a percentage!
+            'bme280_humidity_ratio': 0.1 * 0.01,
         }[self.value]
 
     @property
