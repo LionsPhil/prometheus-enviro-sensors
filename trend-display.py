@@ -120,6 +120,12 @@ arg_parser.add_argument('--trend-steady',
 arg_parser.add_argument('--trend-falling',
     default='⬊',
     help='String to use for falling trend')
+arg_parser.add_argument('--trend-unknown',
+    default='?',
+    help='String to use for no trend data')
+arg_parser.add_argument('--current-unknown',
+    default='ERR',
+    help='String to use for no current data')
 arg_parser.add_argument('--top-fraction', type=float,
     default=0.67,
     help='Vertical proportion of the display to use for the metric value')
@@ -286,26 +292,29 @@ def main():
             historic = None
             try:
                 value = get_metric(metric, args.instance)
+            except GetMetricError as err:
+                sys.stderr.write(f"{err}\n")
+            try:
                 historic = get_metric(metric, args.instance,
                     at_time=time.time() - args.lookback)
             except GetMetricError as err:
                 sys.stderr.write(f"{err}\n")
-                # TODO: This is not intended to be fatal, but is for now.
-                # (Instead it should show an X or something.)
-                # When unfatal-ing this, 'historic' failing should only
-                # invalidate the trend, not the whole thing.
-                raise
 
-            change = value - historic
-            trend_text = None
-            if abs(change) < metric.epsilon:
-                trend_text = args.trend_steady
-            elif change > 0:
-                trend_text = args.trend_rising
-            else:
-                trend_text = args.trend_falling
+            value_text = args.current_unknown
+            trend_text = args.trend_unknown
 
-            value_text = metric.format(value)
+            if value != None:
+                value_text = metric.format(value)
+                if historic != None:
+                    change = value - historic
+                    trend_text = None
+                    if abs(change) < metric.epsilon:
+                        trend_text = args.trend_steady
+                    elif change > 0:
+                        trend_text = args.trend_rising
+                    else:
+                        trend_text = args.trend_falling
+
             value_font = fonts_for_digits[min(len(value_text), MAX_DIGITS)]
             (w, h) = draw.textsize(value_text, value_font)
             value_x = (disp.width - w) / 2
