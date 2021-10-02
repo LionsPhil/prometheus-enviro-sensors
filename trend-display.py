@@ -104,10 +104,13 @@ arg_parser.add_argument('--max-age', type=float,
 arg_parser.add_argument('--delay', type=float,
     default=3.0,
     help='Seconds to hold each metric before moving to the next')
-arg_parser.add_argument('--font',
+arg_parser.add_argument('--top-font',
     default='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
     help='Font file to for display')
-# Other trend chars to try: '▲▬▼', '/-\' (safe ASCII)
+arg_parser.add_argument('--bottom-font',
+    default='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    help='Font file to for display')
+# Other trend chars to try: '▲▬▼' (or '━'), '^-v', '/-\'
 arg_parser.add_argument('--trend-rising',
     default='⬈',
     help='String to use for rising trend')
@@ -234,9 +237,12 @@ def calculate_font_sizes(disp, draw, height_for_value, height_for_bottom, digits
         while w < disp.width and h < height_for_value:
             last_font = temp_font
             temp_font_size += 1
-            temp_font = ImageFont.truetype(args.font, temp_font_size)
+            temp_font = ImageFont.truetype(args.top_font, temp_font_size)
             # This assumes 8 is no narrower than any other digit.
             (w, h) = draw.textsize("8" * digits, temp_font)
+            # For newer PIL (than is in Debian), perhaps try:
+            #(_, _, w, h) = draw.textbbox((0, 0), "8" * digits,
+            #    font=temp_font, anchor='lt')
         # Wind back, so we use the last one that fit, and also resume from here
         # finding the size for fewer digits.
         temp_font = last_font
@@ -246,12 +252,13 @@ def calculate_font_sizes(disp, draw, height_for_value, height_for_bottom, digits
     fonts_for_digits[0] = fonts_for_digits[1] # Just in case of empty string.
 
     # Work back downward to find the bottom font; we assume it can't be bigger
-    # than the font size for a single top character.
+    # than the font size for a single top character. (This could fail if the
+    # fonts are very different or the top fraction very small.)
     font_for_bottom = None
     while font_for_bottom == None:
-        temp_font = ImageFont.truetype(args.font, temp_font_size)
+        temp_font = ImageFont.truetype(args.bottom_font, temp_font_size)
         (w, h) = draw.textsize(f"{METRIC_LONGEST_UNITS} {args.trend_steady}", temp_font)
-        if h <= height_for_bottom:
+        if w <= disp.width and h <= height_for_bottom:
             font_for_bottom = temp_font
             sys.stderr.write(f"For units and trend, use {temp_font_size}pt\n")
         else:
