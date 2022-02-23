@@ -60,7 +60,6 @@ There is absolutely no guarantee I'll ever get to any of this. It's an idea dump
 
 Bugs/nits:
 
-- The stderr messages *should* be going into the journal that `systemctl status` shows snippets from, but seem to be getting lost. This doesn't really matter since it's just startup messages.
 - The polling isn't really every second; that's a lower-bound assuming everything else is instant, but there are known `sleep`s in the sensor libraries.
 - The SGP30 baseline is not saved on graceful exit. This probably doesn't matter much since I don't think it's supposed to drift dramatically, so long as you're running the daemon for at least an hour.
 

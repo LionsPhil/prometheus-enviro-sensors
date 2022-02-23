@@ -30,7 +30,13 @@ If you renamed your instance, pass `--instance NAME`.
 
 The default should rotate through the eCO2, temperature, and relative humidity readings.
 
-Since this currently just sits running in your terminal <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop it. It will automatically turn the display back off on exit.
+Since this just runs it in your terminal, press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop it. It will automatically turn the display back off on exit.
+
+### Configure systemd
+
+To run it automatically, use the `prometheus-enviro-sensors-trend-display.env` and `prometheus-enviro-sensors-trend-display.service` files using the same instructions as for [configuring systemd for the logging](setup-logging.md).
+
+You will again need to update the path (and possibly user) in the service file. Any flags you used above need to go in the environment file.
 
 ### Customize
 

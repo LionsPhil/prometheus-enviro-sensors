@@ -1,0 +1,15 @@
+[Unit]
+Description=Prometheus environment sensor trend display
+
+[Service]
+Restart=on-failure
+EnvironmentFile=/etc/default/prometheus-enviro-sensors-trend-display
+ExecStart=/usr/bin/python3 /path/to/trend-display.py $ARGS
+Type=simple
+User=pi
+StandardInput=null
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
