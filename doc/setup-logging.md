@@ -172,6 +172,8 @@ For a personal install, you probably want to edit `/etc/grafana/grafana.ini` and
 - Under `[security]`, set `disable_gravatar` to `true`. (This will stop it making external web requests for profile pictures you're not using.)
 - Under `[alerting]`, set `enabled` to `false`. (This is Prometheus' job, if you want it.)
 
-Then you can resume the setup instructions with starting the server and logging in. Check the Grafana documentation for how to build a dashboard. (It's less amicable to shipping a stock one since it wraps all its config in a SQLite database.) See the screenshot above for inspiration.
+Then you can resume the setup instructions with starting the server and logging in. Check the Grafana documentation for how to build a dashboard.
 
-The metrics you want to plot will be named like the Prometheus queries for its console, e.g. `sgp30_co2_ppm{job='enviro-sensors',instance='lounge'}`. You can set units for them under "Field", and set up some thresholds (these aren't alerts, just lines). Change the color before clicking the legend (then consider turning the legend off).
+You can also [import](https://grafana.com/docs/grafana/v8.5/dashboards/export-import/) `grafana-dash.json` from this repository. See the screenshot on the project frontpage (README) for what it looks like. It is a little bit strongly opinionated as to what are sensible ranges for values, and set to only show the `lounge` instance.
+
+The metrics you want to plot will be named like the Prometheus queries for its console, e.g. `sgp30_co2_ppm{job='enviro-sensors'}`. You can set units for them under "Field", and set up some thresholds (these aren't alerts, just lines). Change the color by clicking the legend (then consider turning the legend off).
