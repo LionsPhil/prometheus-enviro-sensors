@@ -135,7 +135,7 @@ while True:
 		sgp30_co2.set(sgp30_result.equivalent_co2)
 		sgp30_tvoc.set(sgp30_result.total_voc)
 		if args.output_stdout:
-			stdout_line += ' eCO2: {: 5d} ppm; TVOC: {: 5d} ppb'.format(
+			stdout_line += ' eCO₂: {: 5d} ppm; TVOC: {: 5d} ppb'.format(
 				sgp30_result.equivalent_co2,
 				sgp30_result.total_voc)
 

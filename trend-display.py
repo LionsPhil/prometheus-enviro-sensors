@@ -80,7 +80,7 @@ class Metric(Enum):
 
 # Static hacks for font measuring purposes.
 METRIC_LONGEST_UNITS=Metric.sgp30_co2_ppm.units
-# CO2 should be the highest, maxed out at 60,000 (six chars with comma).
+# CO₂ should be the highest, maxed out at 60,000 (six chars with comma).
 MAX_DIGITS = 6
 
 arg_parser = argparse.ArgumentParser(description='Display sensor trends on ST7789.')

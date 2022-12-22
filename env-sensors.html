@@ -5,7 +5,7 @@
     <th colspan="2">SGP30</th>
   </tr>
   <tr>
-    <td>eCO2</td>
+    <td>eCO₂</td>
     <td>{{ template "prom_query_drilldown" (args (printf "sgp30_co2_ppm{job='enviro-sensors',instance='%s'}" .Params.instance) "ppm") }}</td>
   </tr>
   <tr>
@@ -36,13 +36,13 @@
 
   <div style="display: flex">
     <div style="flex: 1">
-      <h3>Equivalent CO/2</h3>
+      <h3>Equivalent CO₂</h3>
       <div id="eco2Graph"></div>
       <script>
       new PromConsole.Graph({
         node: document.querySelector("#eco2Graph"),
         expr: "sgp30_co2_ppm{job='enviro-sensors',instance='{{ .Params.instance }}'}",
-        name: "eCO/2",
+        name: "eCO₂",
         min: 400,
         /* max: 60000, is what it's spec'd for, but silly-high */
         yUnits: "ppm",
