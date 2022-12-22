@@ -20,12 +20,12 @@ You can edit that console template to your choosing, or write a different one, o
 
 A Pimoroni breakout garden with the right modules plugged in can cycle through some values locally:
 
-![Photo of (very dusty) ST7789 LCD showing high but falling CO2](spi-lcd-co2.jpg)
+![Photo of (very dusty) ST7789 LCD showing high but falling CO₂](spi-lcd-co2.jpg)
 
 ### Supported sensors
 
-- [SGP30](https://shop.pimoroni.com/products/sgp30-air-quality-sensor-breakout) air quality sensor (eCO/2, TVOC)
-  - This one is useful over the other "air quality" sensors because it actually gives calibrated CO/2 readings, even if "equivalent", rather than an arbitrary "quality" scale.
+- [SGP30](https://shop.pimoroni.com/products/sgp30-air-quality-sensor-breakout) air quality sensor (eCO₂, TVOC)
+  - This one is useful over the other "air quality" sensors because it actually gives calibrated CO₂ readings, even if "equivalent", rather than an arbitrary "quality" scale.
 - [BME280](https://shop.pimoroni.com/products/bme280-breakout) (temperature, pressure, humidity)
 
 Note that it does *not* currently support all the sensors in the Pimoroni [Enviro](https://shop.pimoroni.com/products/enviro) HAT, just the BME280, although it should be easy enough to add (the name is perhaps a little aspirational). I just don't have the hardware to test (or, thus, much inclination). I would suspect that having both this and the code running the display read the sensors at the same time would work poorly, though. If you have the actual hat, it may be easier to hack *that* to export to Prometheus, than hack *this* to co-exist.
@@ -54,7 +54,7 @@ There is absolutely no guarantee I'll ever get to any of this. It's an idea dump
 - Allow using the CPU temperature compensation logic that's in the examples for the BME280, for setups that have the board mounted directly over it. (I use a short GPIO ribbon cable.)
 - For that matter, implement `vcgencmd measure_temp` as an optional sensor, so it can be compensated for Prometheus-side with a computed metric if desired.
 - Bother to set up the Prometheus console to support multiple instances.
-- Suggest some Prometheus alerts, like high CO/2 concentrations.
+- Suggest some Prometheus alerts, like high CO₂ concentrations.
 - Consider doing some refactoring for sensors as a collection of instances of a subclass with register_metrics/init_sensor/measure methods, but this is a little tricksy due to the SGP30/BME280 interaction. Later, if/when there are more supported, perhaps.
 - There's no systemd service setup for the display script yet.
 

@@ -28,7 +28,7 @@ If your display is in the front socket of the breakout garden instead of the bac
 
 If you renamed your instance, pass `--instance NAME`.
 
-The default should rotate through the eCO2, temperature, and relative humidity readings.
+The default should rotate through the eCO₂, temperature, and relative humidity readings.
 
 Since this just runs it in your terminal, press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop it. It will automatically turn the display back off on exit.
 
