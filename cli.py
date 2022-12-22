@@ -26,7 +26,7 @@ class Metric(Enum):
     @property
     def name(self):
         return {
-            'sgp30_co2_ppm': 'CO₂',
+            'sgp30_co2_ppm': 'CO2',
             'bme280_temperature_celsius': 'Temperature',
             'bme280_humidity_ratio': 'Humidity',
         }[self.value]
