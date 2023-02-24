@@ -90,6 +90,11 @@ arg_parser.add_argument('--prometheus',
 arg_parser.add_argument('--instance',
     default='lounge',
 	help='Instance to show values from')
+arg_parser.add_argument('--fallback',
+    default='http://localhost:9092/metrics',
+    help='Fallback to directly query the instance if Prometheus fails')
+arg_parser.add_argument('--force-fallback', action='store_true',
+    help='Assume Prometheus is broken and immediately fall back')
 arg_parser.add_argument('--metrics', nargs='+', type=Metric,
     default=[Metric.sgp30_co2_ppm, Metric.bme280_temperature_celsius, Metric.bme280_humidity_ratio],
 	help='Metrics to show')
@@ -180,10 +185,30 @@ else:
         spi_speed_hz=80 * 1000 * 1000
     )
 
+
 class GetMetricError(Exception):
     pass
 
+
+class GetMetricFallbackError(GetMetricError):
+    pass
+
+
 def get_metric(metric, instance, job='enviro-sensors', at_time=None):
+    if not args.force_fallback:
+        try:
+            return get_metric_prometheus(metric, instance, job, at_time)
+        except GetMetricError as err:
+            sys.stderr.write(f"{err}\n")
+
+    if args.fallback == "":
+        raise GetMetricFallbackError("No fallback configured")
+
+    # Prometheus failed or fallback was forced.
+    return get_metric_fallback(metric, instance, job, at_time)
+
+
+def get_metric_prometheus(metric, instance, job, at_time):
     url = args.prometheus + '/api/v1/query'
     query_args = {'query': metric, 'time': at_time}
     # It does not appear the instant-query API lets you add instance/job
@@ -230,6 +255,33 @@ def get_metric(metric, instance, job='enviro-sensors', at_time=None):
         # https://prometheus.io/docs/prometheus/latest/querying/api/#instant-queries
         raise GetMetricError('Got unexpected JSON from Prometheus') from err
 
+
+def get_metric_fallback(metric, instance, job, at_time):
+    del instance  # Unsupported and ignored for fallback.
+    if at_time is not None:
+        raise GetMetricFallbackError("Fallback does not support history.")
+
+    url = args.fallback
+    response = None
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+    except requests.RequestException as err:
+        raise GetMetricError('HTTP error querying fallback') from err
+
+    for line in response.iter_lines(decode_unicode=True):
+        (l_metric, _, l_value) = line.partition(" ")
+        # Slightly evil: fails without str, but prints as the same. The metric
+        # is our Enum, not a string, and the cast isn't implicit.
+        if l_metric == str(metric):
+            try:
+                return float(l_value)
+            except ValueError as err:
+                raise GetMetricError(f"Bad metric value '{l_value}' from fallback") from err
+
+    raise GetMetricError(f"Metric '{metric}' was not returned by fallback")
+
+
 def calculate_font_sizes(disp, draw, height_for_value, height_for_bottom, digits):
     """Returns a tuple of dict of digits->font, and a bottom font."""
     fonts_for_digits = {}
@@ -272,6 +324,7 @@ def calculate_font_sizes(disp, draw, height_for_value, height_for_bottom, digits
 
     return (fonts_for_digits, font_for_bottom)
 
+
 def main():
     img = Image.new('RGB', (disp.width, disp.height), color=(0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -284,17 +337,26 @@ def main():
         disp, draw, height_for_value, height_for_bottom, MAX_DIGITS)
     sys.stderr.write("Fonts ready, beginning display.\n")
 
+    if args.fallback == "":
+        sys.stderr.write("No fallback configured.\n")
+    if args.force_fallback:
+        sys.stderr.write("Fallback forced; Prometheus will be ignored.\n")
+
     while True:
         for metric in args.metrics:
             value = None
             historic = None
             try:
                 value = get_metric(metric, args.instance)
+            except GetMetricFallbackError as err:
+                pass  # Don't spam about not having a fallback.
             except GetMetricError as err:
                 sys.stderr.write(f"{err}\n")
             try:
                 historic = get_metric(metric, args.instance,
                     at_time=time.time() - args.lookback)
+            except GetMetricFallbackError as err:
+                pass  # Fallback doesn't support history; don't spam log more.
             except GetMetricError as err:
                 sys.stderr.write(f"{err}\n")
 
@@ -345,6 +407,7 @@ def main():
                 font=font_for_bottom, fill=bottom_color)
             disp.display(img)
             time.sleep(args.delay)
+
 
 if __name__ == '__main__':
     try:
