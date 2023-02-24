@@ -8,6 +8,14 @@ There's also a script you can run that will display some current values and tren
 
 This is absolutely a quick hack, to set expectations. But I did document it, so it's got that going for it.
 
+> **Careful:** Two years in I'm hitting the limitations of Prometheus on a Raspberry Pi logging this data:
+>
+> - The 32-bit version of Prometheus more or less doesn't work on Bullseye, since it tries to `mmap` more things than fit in the address space. Upstream's stance is that this isn't worth fixing (it'd be kinder if they stopped pretending to support 32-bit).
+> - You can still run the older Buster release if you fetch the 2.7 package from the pool, but it too will eventually start hitting address space limits after about two years of data, and start failing in very stupid and dangerous ways: writing constantly to the drive creating broken TSDB updates, crashlooping, and losing all history.
+> - You cannot upgrade from 32-bit to 64-bit Raspbian. You must install a new image. Until recently, sticking on the tested and universal 32-bit release was recommended.
+>
+> Due to the last of these, I haven't yet tested if 64-bit Raspbian resolves these problems.
+
 ### Screenshots
 
 This is the Prometheus console provided by the default configuration:
