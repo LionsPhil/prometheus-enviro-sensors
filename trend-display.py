@@ -295,10 +295,7 @@ def calculate_font_sizes(disp, draw, height_for_value, height_for_bottom, digits
             temp_font_size += 1
             temp_font = ImageFont.truetype(args.top_font, temp_font_size)
             # This assumes 8 is no narrower than any other digit.
-            (w, h) = draw.textsize("8" * digits, temp_font)
-            # For newer PIL (than is in Debian), perhaps try:
-            #(_, _, w, h) = draw.textbbox((0, 0), "8" * digits,
-            #    font=temp_font, anchor='lt')
+            (_, _, w, h) = draw.textbbox((0, 0), "8" * digits, font=temp_font)
         # Wind back, so we use the last one that fit, and also resume from here
         # finding the size for fewer digits.
         temp_font = last_font
@@ -313,7 +310,7 @@ def calculate_font_sizes(disp, draw, height_for_value, height_for_bottom, digits
     font_for_bottom = None
     while font_for_bottom == None:
         temp_font = ImageFont.truetype(args.bottom_font, temp_font_size)
-        (w, h) = draw.textsize(f"{METRIC_LONGEST_UNITS} {args.trend_steady}", temp_font)
+        (_, _, w, h) = draw.textbbox((0, 0), f"{METRIC_LONGEST_UNITS} {args.trend_steady}", font=temp_font)
         if w <= disp.width and h <= height_for_bottom:
             font_for_bottom = temp_font
             sys.stderr.write(f"For units and trend, use {temp_font_size}pt\n")
@@ -376,14 +373,14 @@ def main():
                         trend_text = args.trend_falling
 
             value_font = fonts_for_digits[min(len(value_text), MAX_DIGITS)]
-            (w, h) = draw.textsize(value_text, value_font)
+            (_, _, w, h) = draw.textbbox((0, 0), value_text, font=value_font)
             value_x = (disp.width - w) / 2
             value_y = (height_for_value - h) / 2
 
-            (w, h) = draw.textsize(metric.units, font_for_bottom)
+            (_, _, w, h) = draw.textbbox((0, 0), metric.units, font=font_for_bottom)
             unit_y = ((height_for_bottom - h) / 2) + height_for_value
 
-            (w, h) = draw.textsize(trend_text, font_for_bottom)
+            (_, _, w, h) = draw.textbbox((0, 0), trend_text, font=font_for_bottom)
             trend_x = (disp.width-1) - w
             trend_y = ((height_for_bottom - h) / 2) + height_for_value
 
