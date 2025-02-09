@@ -5,6 +5,7 @@
 # Licensed under the EUPL-1.2-or-later.
 
 import argparse
+import signal
 import sys
 import time
 from enum import Enum
@@ -450,11 +451,17 @@ def main():
             disp.display(img)
             time.sleep(args.delay)
 
+class ExitSignal(Exception):
+    pass
+
+def sigterm_handler(_signo, _stack_frame):
+    raise ExitSignal()
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGTERM, sigterm_handler)
     try:
         main()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExitSignal):
         # Blank and turn off the display on the way out.
         # If we don't blank as well, when the Pi turns off, the backlight will
         # come back on, and show whatever was last displayed---wrong values.
