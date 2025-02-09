@@ -28,6 +28,10 @@ arg_parser.add_argument('--sgp30-humidity-compensation', action='store_true',
 	help='Use the BME280 to provide the SGP30 with humidity values')
 arg_parser.add_argument('--sense-bme280', action='store_true',
 	help='Read the BME280 temperature/pressure/humidity sensor')
+arg_parser.add_argument('--sense-scd4x', action='store_true',
+	help='Read the SCD41 CO2/temperature/humidity sensor')
+arg_parser.add_argument('--sense-ltr559', action='store_true',
+	help='Read the LTR559 lux/proximity sensor')
 arg_parser.add_argument('--prometheus-port', type=int, default=9092,
 	help='Port to export Prometheus metrics on')
 arg_parser.add_argument('--prometheus-python-metrics', action='store_true',
@@ -36,7 +40,7 @@ arg_parser.add_argument('--output-stdout', action='store_true',
 	help='Output values to standard output')
 args = arg_parser.parse_args()
 
-if not (args.sense_sgp30 or args.sense_bme280):
+if not (args.sense_sgp30 or args.sense_bme280 or args.sense_scd4x or args.sense_ltr559):
 	arg_parser.print_help(file=sys.stderr)
 	sys.exit("\nNo sensors specified; this is probably not what you want."
 		" Refusing to do nothing.")
@@ -65,6 +69,25 @@ if args.sense_bme280:
 	bme280_temperature = Gauge('bme280_temperature_celsius', 'Ambient temperature in celsius')
 	bme280_pressure = Gauge('bme280_pressure_pascals', 'Barometric pressure in pascals')
 	bme280_humidity = Gauge('bme280_humidity_ratio', 'Relative humidity')
+
+scd4x_co2 = None
+scd4x_temperature = None
+scd4x_humidity = None
+if args.sense_scd4x:
+	scd4x_co2 = Gauge('scd4x_co2_ppm', 'Carbon dioxide in parts per million')
+	scd4x_temperature = Gauge('bme280_temperature_celsius', 'Ambient temperature in celsius')
+	scd4x_humidity = Gauge('bme280_humidity_ratio', 'Relative humidity')
+
+ltr559_lux = None
+ltr559_proximity = None
+if args.sense_ltr559:
+	# According to the datasheet, the light reading is in actual Lux, but as
+	# far as I can tell the proximity is a reflected pulse count that is an
+	# 11-bit value with a default gain of 1x (and does seem to range up to 2047
+	# in real testing). Turn that into a ratio in Prometheus-ese to at least
+	# free downstreams of having to know the magic divisor.
+	ltr559_lux = Gauge('ltr559_lux', 'Ambient light in lux')
+	ltr559_proximity = Gauge('ltr559_proximity_ratio', 'Proximity to sensor')
 
 # Sensors
 sgp30_sensor = None
@@ -113,6 +136,20 @@ if args.sense_bme280:
 	# The first value read seems to be kinda crazy sometimes. Discard it.
 	bme280_sensor.update_sensor()
 
+scd4x_sensor = None
+if args.sense_scd4x:
+	sys.stderr.write("Initializing SCD4x\n")
+	from scd4x import SCD4X
+	scd4x_sensor = SCD4X()
+	# Per the datasheet, this is every five seconds.
+	scd4x_sensor.start_periodic_measurement()
+
+ltr559_sensor = None
+if args.sense_ltr559:
+	sys.stderr.write("Initializing LTR559\n")
+	from ltr559 import LTR559
+	ltr559_sensor = LTR559()
+
 # Start up the metric export.
 sys.stderr.write("Starting webserver and becoming ready\n")
 start_http_server(args.prometheus_port)
@@ -135,7 +172,7 @@ while True:
 		sgp30_co2.set(sgp30_result.equivalent_co2)
 		sgp30_tvoc.set(sgp30_result.total_voc)
 		if args.output_stdout:
-			stdout_line += ' eCO2: {: 5d} ppm; TVOC: {: 5d} ppb'.format(
+			stdout_line += ' {: 5d}ppm eCO2 {: 5d}ppb TVOC'.format(
 				sgp30_result.equivalent_co2,
 				sgp30_result.total_voc)
 
@@ -194,6 +231,34 @@ while True:
 			# There's no function for this in the Python library, but there is
 			# a constant to still let us use the mid-level API.
 			sgp30_sensor.command('set_humidity', [absolute_humidity])
+
+	if args.sense_scd4x:
+		# Ok, per the datasheet, the SCD41 is a little bit funky. Reads are
+		# destructive, and data is made available on its own polling clock,
+		# the 5 seconds mentioned during init (you can do one-shot reads, but
+		# you have to wait for the init procedure each time then).
+		# So even if we do non-blocking, a timeout less than five seconds will
+		# likely be reached, and we don't want to sit around that long.
+		# The good news is that this is fine; a data-not-ready just means
+		# there's no new readings to export yet, it's not an error.
+		co2, temperature, relative_humidity, _ = scd4x_sensor.measure(blocking=False) or (None, None, None, None)
+		if co2 is not None:
+			scd4x_co2.set(co2)
+			scd4x_temperature.set(temperature)
+			scd4x_humidity.set(relative_humidity / 100.0)
+			if args.output_stdout:
+				stdout_line += ' {: 5d}ppm CO2 {:05.2f}°C {:05.2f}%'.format(
+					co2, temperature, relative_humidity)
+
+	if args.sense_ltr559:
+		ltr559_sensor.update_sensor()
+		# Passive mode avoids both of these then updating the sensor again.
+		lux = ltr559_sensor.get_lux(passive=True)
+		prox = ltr559_sensor.get_proximity(passive=True) / 2047.0
+		ltr559_lux.set(lux)
+		ltr559_proximity.set(prox)
+		if args.output_stdout:
+				stdout_line += ' {:05.2f}lux {:04.3f}prox'.format(lux, prox)
 
 	if args.output_stdout:
 		print(stdout_line)

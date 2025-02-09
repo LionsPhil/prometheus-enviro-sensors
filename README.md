@@ -35,6 +35,9 @@ A Pimoroni breakout garden with the right modules plugged in can cycle through s
 - [SGP30](https://shop.pimoroni.com/products/sgp30-air-quality-sensor-breakout) air quality sensor (eCO₂, TVOC)
   - This one is useful over the other "air quality" sensors because it actually gives calibrated CO₂ readings, even if "equivalent", rather than an arbitrary "quality" scale.
 - [BME280](https://shop.pimoroni.com/products/bme280-breakout) (temperature, pressure, humidity)
+- [SCD41](https://shop.pimoroni.com/products/scd41-co2-sensor-breakout) (CO₂, temperature, humidity)
+  - More expensive (and newer) than the SGP30, this gives *real* CO₂ readings, not "equivalent".
+- [LTR559](https://shop.pimoroni.com/products/ltr-559-light-proximity-sensor-breakout) (light, proximity)
 
 Note that it does *not* currently support all the sensors in the Pimoroni [Enviro](https://shop.pimoroni.com/products/enviro) HAT, just the BME280, although it should be easy enough to add (the name is perhaps a little aspirational). I just don't have the hardware to test (or, thus, much inclination). I would suspect that having both this and the code running the display read the sensors at the same time would work poorly, though. If you have the actual hat, it may be easier to hack *that* to export to Prometheus, than hack *this* to co-exist.
 
@@ -57,10 +60,10 @@ If you have the display as well, then see **[doc/setup-display.md](doc/setup-dis
 There is absolutely no guarantee I'll ever get to any of this. It's an idea dumping ground. Pull requests welcome though.
 
 - Support more of the environmental sensors, like the relevant EnviroHat ones.
-  - [LTR-559](https://shop.pimoroni.com/products/ltr-559-light-proximity-sensor-breakout) (light, proximity)
   - [MICS6814](https://shop.pimoroni.com/products/mics6814-gas-sensor-breakout) (CO, NO2, NH3)
 - Allow using the CPU temperature compensation logic that's in the examples for the BME280, for setups that have the board mounted directly over it. (I use a short GPIO ribbon cable.)
 - For that matter, implement `vcgencmd measure_temp` as an optional sensor, so it can be compensated for Prometheus-side with a computed metric if desired.
+- Feed the BME280 pressure reading into the SCD41, per the latter's datasheet. This is a fairly unlikely pair of breakouts though, given the overlap in temperature and humidity functionality.
 - Bother to set up the Prometheus console to support multiple instances.
 - Suggest some Prometheus alerts, like high CO₂ concentrations.
 - Consider doing some refactoring for sensors as a collection of instances of a subclass with register_metrics/init_sensor/measure methods, but this is a little tricksy due to the SGP30/BME280 interaction. Later, if/when there are more supported, perhaps.
