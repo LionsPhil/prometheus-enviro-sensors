@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Daemon to export various Pimoroni environment sensors to Prometheus.
-# Copyright 2021 Philip Boulain,
+# Copyright 2021-2025 Philip Boulain,
 # with parts derived from MIT-licensed Pimoroni example code.
 # Licensed under the EUPL-1.2-or-later.
 
@@ -75,8 +75,8 @@ scd4x_temperature = None
 scd4x_humidity = None
 if args.sense_scd4x:
 	scd4x_co2 = Gauge('scd4x_co2_ppm', 'Carbon dioxide in parts per million')
-	scd4x_temperature = Gauge('bme280_temperature_celsius', 'Ambient temperature in celsius')
-	scd4x_humidity = Gauge('bme280_humidity_ratio', 'Relative humidity')
+	scd4x_temperature = Gauge('scd4x_temperature_celsius', 'Ambient temperature in celsius')
+	scd4x_humidity = Gauge('scd4x_humidity_ratio', 'Relative humidity')
 
 ltr559_lux = None
 ltr559_proximity = None
