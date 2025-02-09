@@ -33,6 +33,10 @@ class Metric(Enum):
     def __str__(self):
         return self.value
 
+    def sensor_agnostic(self):
+        sensor, _, measurement = self.value.partition('_')
+        return measurement or sensor
+
     @property
     def epsilon(self):
         """How far away a value can be to be trending 'level'."""
@@ -41,17 +45,14 @@ class Metric(Enum):
         # i.e. how much it can swing within indoor norms in 10 minutes.
         return {
             # 400~2400 => 2000 range => 100 is 5% of it.
-            'sgp30_co2_ppm': 100,
-            'scd4x_co2_ppm': 100,
+            'co2_ppm': 100,
             # 20~25 => 5 range => 0.1 is 2% of it.
             # This one feels it should be a bit more sensitive.
-            'bme280_temperature_celsius': 0.1,
-            'scd4x_temperature_celsius': 0.1,
+            'temperature_celsius': 0.1,
             # 30~50 => 20 range => 0.1 is 5% of it.
             # But remember this is a ratio, not a percentage!
-            'bme280_humidity_ratio': 0.1 * 0.01,
-            'scd4x_humidity_ratio': 0.1 * 0.01,
-        }[self.value]
+            'humidity_ratio': 0.1 * 0.01,
+        }[self.sensor_agnostic()]
 
     @property
     def bgcolor(self):
@@ -62,37 +63,28 @@ class Metric(Enum):
         # If you're worried about burn-in, make sure each component goes to
         # 0x00 for at least one metric which you are displaying.
         return {
-            'sgp30_co2_ppm': (0x55, 0xff, 0x00),
-            'scd4x_co2_ppm': (0x55, 0xff, 0x00),
-            'bme280_temperature_celsius': (0xff, 0xaa, 0x00),
-            'scd4x_temperature_celsius': (0xff, 0xaa, 0x00),
+            'co2_ppm': (0x55, 0xff, 0x00),
+            'temperature_celsius': (0xff, 0xaa, 0x00),
             # Because blue is so dark, we boost it a bit with more green.
-            'bme280_humidity_ratio': (0x00, 0xcc, 0xff),
-            'scd4x_humidity_ratio': (0x00, 0xcc, 0xff),
-        }[self.value]
+            'humidity_ratio': (0x00, 0xcc, 0xff),
+        }[self.sensor_agnostic()]
 
     @property
     def units(self):
         return {
-            'sgp30_co2_ppm': 'ppm', # Try smallcap ᴘᴘᴍ to avoid descenders.
-            'scd4x_co2_ppm': 'ppm',
-            'bme280_temperature_celsius': '°C',
-            'scd4x_temperature_celsius': '°C',
-            'bme280_humidity_ratio': '%',
-            'scd4x_humidity_ratio': '%',
-        }[self.value]
+            'co2_ppm': 'ppm', # Try smallcap ᴘᴘᴍ to avoid descenders.
+            'temperature_celsius': '°C',
+            'humidity_ratio': '%',
+        }[self.sensor_agnostic()]
 
     def format(self, value):
         return {
-            'sgp30_co2_ppm': '{:n}'.format(value),
-            'scd4x_co2_ppm': '{:n}'.format(value),
-            'bme280_temperature_celsius': '{:.1f}'.format(value),
-            'scd4x_temperature_celsius': '{:.1f}'.format(value),
+            'co2_ppm': '{:n}'.format(value),
+            'temperature_celsius': '{:.1f}'.format(value),
             # '{:d}'.format(round(value * 100.0)) looks good for chunky fonts
             # like DejaVuSans; this looks better for thin ones line Antonio.
-            'bme280_humidity_ratio': '{:.1f}'.format(value*100.0),
-            'scd4x_humidity_ratio': '{:.1f}'.format(value*100.0),
-        }[self.value]
+            'humidity_ratio': '{:.1f}'.format(value*100.0),
+        }[self.sensor_agnostic()]
 
 # Static hacks for font measuring purposes.
 METRIC_LONGEST_UNITS=Metric.sgp30_co2_ppm.units
