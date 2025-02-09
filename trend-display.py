@@ -206,10 +206,10 @@ class GetMetricFallbackError(GetMetricError):
     pass
 
 
-def get_metric(metric, instance, job='enviro-sensors', at_time=None):
+def get_metric(metric, instance, at_time=None):
     if not args.force_fallback:
         try:
-            return get_metric_prometheus(metric, instance, job, at_time)
+            return get_metric_prometheus(metric, instance, at_time)
         except GetMetricError as err:
             sys.stderr.write(f"{err}\n")
 
@@ -217,13 +217,13 @@ def get_metric(metric, instance, job='enviro-sensors', at_time=None):
         raise GetMetricFallbackError("No fallback configured")
 
     # Prometheus failed or fallback was forced.
-    return get_metric_fallback(metric, instance, job, at_time)
+    return get_metric_fallback(metric, instance, at_time)
 
 
-def get_metric_prometheus(metric, instance, job, at_time):
+def get_metric_prometheus(metric, instance, at_time):
     url = args.prometheus + '/api/v1/query'
     query_args = {'query': metric, 'time': at_time}
-    # It does not appear the instant-query API lets you add instance/job
+    # It does not appear the instant-query API lets you add instance
     # labels to the query, so we greedily ask for everything, then filter below.
     response = None
     try:
@@ -250,7 +250,7 @@ def get_metric_prometheus(metric, instance, job, at_time):
             raise GetMetricError('Non-success response from Prometheus')
         for result in data['data']['result']:
             rm = result['metric']
-            if rm['instance'] == instance and rm['job'] == job:
+            if rm['instance'] == instance:
                 age = at_time - result['value'][0]
                 if age <= args.max_age:
                     v = result['value'][1]
@@ -259,16 +259,16 @@ def get_metric_prometheus(metric, instance, job, at_time):
                     except ValueError as err:
                         raise GetMetricError(f"Bad metric value '{v}' from Prometheus") from err
                 else:
-                    raise GetMetricError(f"Data from Prometheus for '{metric}' instance=\"{instance}\", job=\"{job}\" is too old ({age} > {args.max_age} seconds)")
+                    raise GetMetricError(f"Data from Prometheus for '{metric}' instance=\"{instance}\", is too old ({age} > {args.max_age} seconds)")
         # Didn't find it in results
-        raise GetMetricError(f"No data from Prometheus for {metric} instance=\"{instance}\", job=\"{job}\"")
+        raise GetMetricError(f"No data from Prometheus for {metric} instance=\"{instance}\"")
     except KeyError as err:
         # This means the structure wasn't what we expected according to
         # https://prometheus.io/docs/prometheus/latest/querying/api/#instant-queries
         raise GetMetricError('Got unexpected JSON from Prometheus') from err
 
 
-def get_metric_fallback(metric, instance, job, at_time):
+def get_metric_fallback(metric, instance, at_time):
     del instance  # Unsupported and ignored for fallback.
     if at_time is not None:
         raise GetMetricFallbackError("Fallback does not support history.")
