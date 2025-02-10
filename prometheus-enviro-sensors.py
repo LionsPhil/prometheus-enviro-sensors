@@ -30,6 +30,10 @@ arg_parser.add_argument('--sense-bme280', action='store_true',
 	help='Read the BME280 temperature/pressure/humidity sensor')
 arg_parser.add_argument('--sense-scd4x', action='store_true',
 	help='Read the SCD41 CO2/temperature/humidity sensor')
+arg_parser.add_argument('--scd4x-temperature-offset', type=float, default=None,
+	help='Temperature offset to program the SCD4X for (subtracted!)')
+arg_parser.add_argument('--scd4x-altitude', type=int, default=None,
+	help='Altitude to program the SCD4X for')
 arg_parser.add_argument('--sense-ltr559', action='store_true',
 	help='Read the LTR559 lux/proximity sensor')
 arg_parser.add_argument('--prometheus-port', type=int, default=9092,
@@ -141,6 +145,11 @@ if args.sense_scd4x:
 	sys.stderr.write("Initializing SCD4x\n")
 	from scd4x import SCD4X
 	scd4x_sensor = SCD4X()
+	if args.scd4x_temperature_offset is not None:
+		scd4x_sensor.set_temperature_offset(args.scd4x_temperature_offset)
+	if args.scd4x_altitude is not None:
+		scd4x_sensor.set_altitude(args.scd4x_altitude)
+	sys.stderr.write(f"SCD4x has been set for {scd4x_sensor.get_temperature_offset()}°C offset; {scd4x_sensor.get_altitude()}m ASL\n")
 	# Per the datasheet, this is every five seconds.
 	scd4x_sensor.start_periodic_measurement()
 

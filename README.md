@@ -61,8 +61,6 @@ There is absolutely no guarantee I'll ever get to any of this. It's an idea dump
 
 - Support more of the environmental sensors, like the relevant EnviroHat ones.
   - [MICS6814](https://shop.pimoroni.com/products/mics6814-gas-sensor-breakout) (CO, NO2, NH3)
-- Allow using the CPU temperature compensation logic that's in the examples for the BME280, for setups that have the board mounted directly over it. (I use a short GPIO ribbon cable.)
-- For that matter, implement `vcgencmd measure_temp` as an optional sensor, so it can be compensated for Prometheus-side with a computed metric if desired.
 - Feed the BME280 pressure reading into the SCD41, per the latter's datasheet. This is a fairly unlikely pair of breakouts though, given the overlap in temperature and humidity functionality.
 - Bother to set up the Prometheus console to support multiple instances.
 - Suggest some Prometheus alerts, like high CO₂ concentrations.
@@ -78,6 +76,12 @@ Really scope-creepy stuff:
 
 - Log to rrdtool as well, for more suitable long-term storage with downsampling.
 - Have a different display script that only shows Prometheus alerts on the tiny panel. For example, have an alert suggest an image and a priority as labels, and if there are any, show the highest one and the metric value, else keep the screen backlight off.
+
+Nope:
+
+- Allow using the CPU temperature compensation logic that's in the examples for the BME280, for setups that have the board mounted directly over it.
+- For that matter, implement `vcgencmd measure_temp` as an optional sensor, so it can be compensated for Prometheus-side with a computed metric if desired.
+   - Both of these exist as an unapplied `cputemp-compensation.patch`...because they add a ton of complexity for a not-very-in-scope metric (this is not a system monitor) and a compensation approach that doesn't work great in practice IME. I prefer the hardware solution of a short GPIO ribbon cable to move the breakout aside from the board; the SCD4X also supports a linear offset which seems suitable for the breakout's own heating.
 
 ## Thanks
 
