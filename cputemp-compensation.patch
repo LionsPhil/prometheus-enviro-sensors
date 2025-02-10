@@ -1,0 +1,147 @@
+diff --git a/prometheus-enviro-sensors.py b/prometheus-enviro-sensors.py
+index 6e35b2c..0f2cbb7 100644
+--- a/prometheus-enviro-sensors.py
++++ b/prometheus-enviro-sensors.py
+@@ -8,17 +8,33 @@ import argparse
+ from datetime import datetime
+ import json
+ import math
++import subprocess
+ import sys
+ import time
+ 
+ from prometheus_client import REGISTRY, start_http_server, Gauge
+ 
++# CPU heating compensation is based on Pimoroni example code:
++# https://github.com/pimoroni/bme280-python/blob/main/examples/compensated-temperature.py
++# The sample buffer will size 5x differently based on sensor, but heating
++# effects are not expected to swing massively in under a minute. The factor is
++# a multiplier, tuned for having the base and a boost header between boards.
++# The SCD41 seems to sag temperature from overreading during the first minutes
++# of sensing, and ideally would have the expected delta fed to it to compensate
++# its on-board humidity calcuations, but it's not a simple offset.
++CPUTEMP_COMPENSATION_FACTOR = 0.2  # Larger fraction = more compensation.
++CPUTEMP_COMPENSATION_SAMPLES = 10
++
+ # Arguments
+ # Python doesn't seem to have a 'default true, allow --no-foo' flag, even with
+ # BooleanOptionalAction in 3.9 (and Raspbian is on 3.7 at time of writing).
+ # Prometheus export isn't optional because it's kind of what this is for (and
+ # will only be used if explicitly scraped).
+ arg_parser = argparse.ArgumentParser(description='Export environment sensors to Prometheus.')
++arg_parser.add_argument('--sense-cputemp', action='store_true',
++	help='Read the CPU temperature')
++arg_parser.add_argument('--cputemp-compensation', action='store_true',
++	help='Compensate other temperature readings for CPU heating effects.')
+ arg_parser.add_argument('--sense-sgp30', action='store_true',
+ 	help='Read the SGP30 air quality sensor')
+ arg_parser.add_argument('--sgp30-baseline-file',
+@@ -48,6 +64,9 @@ if not (args.sense_sgp30 or args.sense_bme280 or args.sense_scd4x or args.sense_
+ if args.sgp30_humidity_compensation and not (args.sense_sgp30 and args.sense_bme280):
+ 	sys.exit("Cannot perform humidity compensation without both SGP30 and BME280 sensors.")
+ 
++if args.cputemp_compensation and not args.sense_cputemp:
++	sys.exit("Cannot perform temperature compensation without reading CPU temperature.")
++
+ # Metrics
+ if not args.prometheus_python_metrics:
+ 	# Zap the default metrics, since we don't care at all about the health of this
+@@ -56,6 +75,10 @@ if not args.prometheus_python_metrics:
+ 	for coll in list(REGISTRY._collector_to_names.keys()):
+ 		REGISTRY.unregister(coll)
+ 
++cputemp_temperature = None
++if args.sense_cputemp:
++	cputemp_temperature = Gauge('cputemp_temperature_celsius', 'CPU temperature in celsius')
++
+ sgp30_co2 = None
+ sgp30_tvoc = None
+ if args.sense_sgp30:
+@@ -90,6 +113,12 @@ if args.sense_ltr559:
+ 	ltr559_proximity = Gauge('ltr559_proximity_ratio', 'Proximity to sensor')
+ 
+ # Sensors
++# There is no cputemp_sensor, but we do set up the ringbuffer.
++cputemp_temperature_ringbuffer = None
++if args.sense_cputemp:
++	from collections import deque
++	cputemp_temperature_ringbuffer = deque(maxlen=CPUTEMP_COMPENSATION_SAMPLES)
++
+ sgp30_sensor = None
+ if args.sense_sgp30:
+ 	sys.stderr.write("Initializing SGP30\n")
+@@ -163,10 +192,33 @@ start_http_server(args.prometheus_port)
+ elapsed = 0
+ humidity_out_of_range_warned = False
+ while True:
++	# Garbage collectors love a steady diet of identity lambdas.
++	compensate_temperature = lambda t: t
++
+ 	stdout_line = None
+ 	if args.output_stdout:
+ 		stdout_line = datetime.now().strftime("%H:%M:%S")
+ 
++	if args.sense_cputemp:
++		vcgencmd = subprocess.Popen(["vcgencmd", "measure_temp"], stdout=subprocess.PIPE)
++		stdout, stderr = vcgencmd.communicate()
++		if stderr is not None:
++			sys.stderr.write(f"vcgencmd: {stderr.decode()}\n")
++		stdout = stdout.decode()
++		temperature = None
++		try:
++			temperature = float(stdout[stdout.index("=") + 1 : stdout.rindex("'")])
++		except ValueError:
++			sys.stderr.write(f"Confusing output from vcgencmd: {stdout}\n")
++		if temperature is not None:
++			cputemp_temperature.set(temperature)
++			if args.output_stdout:
++				stdout_line += ' {:05.2f}°C CPU'.format(temperature)
++			cputemp_temperature_ringbuffer.append(temperature)
++			if args.cputemp_compensation:
++				cputemp_mean = sum(cputemp_temperature_ringbuffer) / float(len(cputemp_temperature_ringbuffer))
++				compensate_temperature = lambda t: t - ((cputemp_mean - t) * CPUTEMP_COMPENSATION_FACTOR)
++
+ 	if args.sense_sgp30:
+ 		sgp30_result = sgp30_sensor.get_air_quality()
+ 		sgp30_co2.set(sgp30_result.equivalent_co2)
+@@ -195,14 +247,17 @@ while True:
+ 
+ 	if args.sense_bme280:
+ 		bme280_sensor.update_sensor()
+-		bme280_temperature.set(bme280_sensor.temperature)
++		if args.output_stdout and args.cputemp_compensation:
++				stdout_line += ' {:05.2f}°C raw'.format(bme280_sensor.temperature)
++		temperature = compensate_temperature(bme280_sensor.temperature)
++		bme280_temperature.set(temperature)
+ 		# Pressure is given in hPa, Prometheus prefers base units; 1 hPa = 100 Pa.
+ 		bme280_pressure.set(bme280_sensor.pressure * 100.0)
+ 		# Humidity is given as a percentage; Prometheus prefers 0-1 scales.
+ 		bme280_humidity.set(bme280_sensor.humidity / 100.0)
+ 		if args.output_stdout:
+ 			stdout_line += ' {:05.2f}°C {:05.2f}hPa {:05.2f}%'.format(
+-				bme280_sensor.temperature,
++				temperature,
+ 				bme280_sensor.pressure,
+ 				bme280_sensor.humidity)
+ 		if args.sgp30_humidity_compensation:
+@@ -210,8 +265,8 @@ while True:
+ 			# driver integration guide, section 3.16. This seems to give values
+ 			# that are plausible vs climate data.
+ 			absolute_humidity = 216.7 * (
+-				((bme280_sensor.humidity / 100.0) * 6.112 * math.exp((17.62 * bme280_sensor.temperature) / (243.12 + bme280_sensor.temperature)))
+-				/ (273.15 + bme280_sensor.temperature)
++				((bme280_sensor.humidity / 100.0) * 6.112 * math.exp((17.62 * temperature) / (243.12 + temperature)))
++				/ (273.15 + temperature)
+ 			) * 1000.0
+ 			if args.output_stdout:
+ 				stdout_line += ' {:05.2f}mg/m³'.format(absolute_humidity)
+@@ -243,6 +298,9 @@ while True:
+ 		# there's no new readings to export yet, it's not an error.
+ 		co2, temperature, relative_humidity, _ = scd4x_sensor.measure(blocking=False) or (None, None, None, None)
+ 		if co2 is not None:
++			if args.output_stdout and args.cputemp_compensation:
++				stdout_line += ' {:05.2f}°C raw'.format(temperature)
++			temperature = compensate_temperature(temperature)
+ 			scd4x_co2.set(co2)
+ 			scd4x_temperature.set(temperature)
+ 			scd4x_humidity.set(relative_humidity / 100.0)
