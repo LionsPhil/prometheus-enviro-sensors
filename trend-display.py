@@ -179,17 +179,17 @@ if args.debug_display:
     sys.stderr.write("Using a dummy display.\n")
     disp = DummyDisplay()
 else:
-    import ST7789
+    import st7789
 
     if args.socket == BreakoutSocket.back:
-        args.chip_select = ST7789.BG_SPI_CS_BACK
+        args.chip_select = st7789.BG_SPI_CS_BACK
         args.backlight = 18
     elif args.socket == BreakoutSocket.front:
-        args.chip_select = ST7789.BG_SPI_CS_FRONT
+        args.chip_select = st7789.BG_SPI_CS_FRONT
         args.backlight = 19
 
     sys.stderr.write(f"Initializing ST7789 at chip select {args.chip_select}, backlight {args.backlight}.\n")
-    disp = ST7789.ST7789(
+    disp = st7789.ST7789(
         port=0,
         cs=args.chip_select,
         dc=9,
