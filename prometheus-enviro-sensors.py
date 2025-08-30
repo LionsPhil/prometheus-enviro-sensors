@@ -159,9 +159,7 @@ if args.sense_ltr559:
 	from ltr559 import LTR559
 	ltr559_sensor = LTR559()
 
-# Start up the metric export.
-sys.stderr.write("Starting webserver and becoming ready\n")
-start_http_server(args.prometheus_port)
+sys.stderr.write("Sensors initialized; reading and discarding initial values\n")
 
 # Loop and poll sensors.
 # The SGP30 wants to be sampled every second, so we insist on driving the
@@ -170,8 +168,15 @@ start_http_server(args.prometheus_port)
 # here. But then that's another intermediary for what should be a very light
 # system.
 elapsed = 0
+server_started = False
 humidity_out_of_range_warned = False
 while True:
+	if not server_started and elapsed > 10:
+		# Start up the metric export.
+		sys.stderr.write("Starting webserver and becoming ready\n")
+		start_http_server(args.prometheus_port)
+		server_started = True
+
 	stdout_line = None
 	if args.output_stdout:
 		stdout_line = datetime.now().strftime("%H:%M:%S")
